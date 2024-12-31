@@ -1,0 +1,7 @@
+zip
+unzip
+curl
+wget
+vim
+powerline
+tmux

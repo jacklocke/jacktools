@@ -70,13 +70,37 @@ echo -ne "
 }
 
 mainmenu() {
-    warning
-    echo "**********************************"
-    echo "this space is for future developments..."
-    echo "**********************************"
-    echo "for now use only GIT menu:"
-    # for now call automatically only the only one:
-    source ./tgit.sh #jackt GIT
+    clear
+    logo
+    line
+        echo -ne "
+$(printred '1) Add') GIT tools
+$(printmagenta '9)') First Configuration | $(printred '0)') Exit
+
+Choose an option:  "
+
+    read -r ans
+    case $ans in
+    1)
+        clear
+        logo
+        line
+        source ./tgit.sh
+        ;;
+    9)
+        clear
+        logo
+        line
+        source ./tfirst.sh
+        ;;
+    0)
+        fn_bye
+        ;;
+    *)
+        fn_fail "tmainmenu" $ans
+        ;;
+    esac
+
 }
 
 logo() {
@@ -89,5 +113,4 @@ echo -ne "      /¯/  ____ _  _____   /¯/__ /_¯ __/ ____   ____    /¯/   ____
 
 line
 logo
-#mainmenu
-source ./tgit.sh #jackt GIT
+mainmenu

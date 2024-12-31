@@ -1,40 +1,43 @@
 # JackTools
 
-## WARNING!
-this is start as a "one day project idea", it's just for fun, and it is highly improvable! :)
+> [!WARNING]  
+> `GIT` part is a "one day project idea" just for fun, and it is highly improvable!
 
+The `First configuration` part is for lazy people like me, but can be easly improved based on your needs.
+
+##  Description
+
+JackTools is a simple bash script that helps you to remember some common commands for first boot or start with GIT.
+
+### Usage
+
+First, check configuration folder to make your changes, then run the script with ```./jacktools.sh```
+
+Note: You can also use the tfirst.sh file as a standalone script.
+
+-----
+
+## Menu sample
+
+![preview](img/jtfirst.png)
 
 ![preview](img/jt.gif)
 
 
-
 ###  Features
 
+- Common Commands at first system use
 - Common Git Commands
   
 -----
 
 ###  How I think at it
 
+Usually I use an alias for the script, like:
 ```alias jt='jacktools.sh'```
+but wait, the script cant add the alias for you!
 
-so for your common save it's going to be
-
-```
-jt
-1
-2
-<commit message>
-3
-```
+Is a simple script where add your own commands you need to launch on every new system.
 
 -----
 
-for now: in jacktools.sh change **source** with your path o wherever you want!
-
------
-
-### TODO
- [ ] 
-
- [ ] 

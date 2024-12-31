@@ -2,7 +2,6 @@
 
 # main
 header() {
-    line
     echo -ne "Current folder: $(printblue $(pwd)) | "
 
     # current folder is GIT
@@ -91,7 +90,7 @@ Choose an option:  "
         configmenu
         ;;
     9)
-        tgitmenu
+        _main_menu
         ;;
     0)
         fn_bye
