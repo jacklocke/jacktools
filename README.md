@@ -11,9 +11,21 @@ JackTools is a simple bash script that helps you to remember some common command
 
 ### Usage
 
-First, check configuration folder to make your changes, then run the script with ```./jacktools.sh```
+Run the script with ```./jacktools.sh```
 
-Note: You can also use the tfirst.sh file as a standalone script.
+If you want to customize the configuration, to in the ```configuration``` folder and edit the first variable in```tfirst.sh``` file:
+
+```bash
+localfile=1
+```
+> 1 = local files, 0 = github files
+
+> [!NOTE]
+> Temporary files are located in the ```/tmp/jacktools/``` folder.
+
+-----
+
+You can also use the tfirst.sh file as a standalone script.
 
 -----
 

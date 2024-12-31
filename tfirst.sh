@@ -1,15 +1,7 @@
 #!/bin/bash
 
 # variable to select local file or remote file
-localfile=1
-bashrc_customization_file="configuration/bashrc_customization.txt"
-mypackages_file="configuration/mypackages.txt"
-tmux_conf_file="configuration/tmux.conf"
-
-if [ $localfile -ne 1 ]; then
-    # TODO
-    echo "TODO"
-fi
+localfile=0
 
 line() {
     l=''
@@ -19,6 +11,43 @@ line() {
     echo $l
 }
 
+# Local file (if you have cloned the repository)
+bashrc_customization_file="configuration/bashrc_customization.txt"
+mypackages_file="configuration/mypackages.txt"
+tmux_conf_file="configuration/tmux.conf"
+
+# remote file (if you want to download files from github)
+if [ $localfile -ne 1 ]; then
+
+    # create directory for temporary files
+    mkdir -p /tmp/jacktools
+
+    # check if files are already downloaded
+    if [ -f "/tmp/jacktools/bashrc_customization.txt" ] || [ -f "/tmp/jacktools/mypackages.txt" ] || [ -f "/tmp/jacktools/tmux.conf" ]; then
+        echo "Files already downloaded"
+        line
+        bashrc_customization_file="/tmp/jacktools/bashrc_customization.txt"
+        mypackages_file="/tmp/jacktools/mypackages.txt"
+        tmux_conf_file="/tmp/jacktools/tmux.conf"
+    else
+        echo "Downloading configuration files from github"
+        # download files from github
+        wget https://raw.githubusercontent.com/jacklocke/jacktools/refs/heads/main/configuration/bashrc_customization.txt -O /tmp/jacktools/bashrc_customization.txt
+        wget https://raw.githubusercontent.com/jacklocke/jacktools/refs/heads/main/configuration/mypackages.txt -O /tmp/jacktools/mypackages.txt
+        wget https://raw.githubusercontent.com/jacklocke/jacktools/refs/heads/main/configuration/tmux.conf -O /tmp/jacktools/tmux.conf
+        line
+    fi
+
+    bashrc_customization_file="/tmp/jacktools/bashrc_customization.txt"
+    mypackages_file="/tmp/jacktools/mypackages.txt"
+    tmux_conf_file="/tmp/jacktools/tmux.conf"
+
+    # check if files are downloaded
+    if [ ! -f "$bashrc_customization_file" ] || [ ! -f "$mypackages_file" ] || [ ! -f "$tmux_conf_file" ]; then
+        echo "Error downloading files"
+        exit 1
+    fi
+fi
 
 # this colors part is redundant, but I keep it for using tfirst.sh as completly standalone script with remote files
 
@@ -56,8 +85,9 @@ $(printcyan '4)') add bashrc customizations
 
 $(printred 'all)') Run all
 
-$(printgreen '8)') Delete user (es. ubuntu)
-$(printmagenta '9)') Go Back to MAIN MENU
+$(printmagenta '7)') Delete temporary files (/tmp/jacktools)
+$(printmagenta '8)') Delete user (es. ubuntu)
+$(printgreen '9)') Go Back to MAIN MENU
 $(printred '0)') Exit
 Choose an option:  "
 
@@ -88,6 +118,13 @@ Choose an option:  "
         clear
         line
         addBashrcCustomizations
+        line
+        tfirstmenu
+        ;;
+    7)
+        clear
+        line
+        deleteTempFiles
         line
         tfirstmenu
         ;;
@@ -211,6 +248,12 @@ addBashrcCustomizations() {
             cp $tmux_conf_file ~/.tmux.conf
         fi
     fi
+}
+
+deleteTempFiles() {
+    # delete temporary files
+    rm -rf /tmp/jacktools
+    echo "Temporary files deleted."
 }
 
 deleteUser() {
