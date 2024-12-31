@@ -25,7 +25,13 @@ localfile=1
 
 -----
 
-You can also use the tfirst.sh file as a standalone script.
+### Usage of the First Configuration
+
+You can also use the tfirst.sh file as a standalone script, also in remote mode using the github link.
+
+```bash
+bash <(curl -s https://raw.githubusercontent.com/jacklocke/jacktools/refs/heads/main/tfirst.sh)
+```
 
 -----
 
