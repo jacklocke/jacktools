@@ -195,10 +195,13 @@ userCreation() {
 
 installCommonPackages() {
     sudo apt update
-    #read list in file mypackages.txt
-    while IFS= read -r line; do
-        sudo apt install -y "$line"
-    done <$mypackages_file
+    #read list
+    mapfile -t packages <"$mypackages_file"
+
+    for i in "${packages[@]}"; do
+        echo "Installing $i"
+        sudo apt install -y "$i"
+    done
 }
 
 addBashrcCustomizations() {
@@ -253,9 +256,7 @@ doBashrcAdd() {
     echo "" >>$home/.bashrc
 
     #add customizations to .bashrc from file bashrc_customization.txt
-    while IFS= read -r line; do
-        echo "$line" >>$home/.bashrc
-    done <$bashrc_customization_file
+    cat $bashrc_customization_file >>$home/.bashrc
 
     # ask for create tmux.conf if not exists
     echo "Create/overwrite also tmux.conf file? (y/n)"
