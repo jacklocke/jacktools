@@ -203,7 +203,7 @@ installCommonPackages() {
 
 addBashrcCustomizations() {
     #ask for confirmation
-    echo "This will add customizations to .bashrc file. Continue? (y/n)"
+    echo "This will add customizations to .bashrc file to current user. Continue? (y/n)"
     read -r confirm
 
     if [ "$confirm" = "y" ]; then
@@ -216,39 +216,55 @@ addBashrcCustomizations() {
 
         todaydate=$(date +"%Y-%m-%d")
 
-        echo "" >>~/.bashrc
-        echo "" >>~/.bashrc
+        #pass parameter for current home directory
+        doBashrcAdd ~
+    fi
 
-        # Add markers to .bashrc to easily find autoamtic part in the future
-        echo "##########START##########" >>~/.bashrc
-        echo "########$todaydate#######" >>~/.bashrc
-        echo "########################" >>~/.bashrc
+}
 
-        #ask for current configuration
-        echo "Insert current_cfg value (default is $(hostname)):"
-        read -r current_cfg
-        if [ -z "$current_cfg" ]; then
-            current_cfg=$(hostname)
-        fi
 
-        echo "" >>~/.bashrc
-        echo "current_cfg=$current_cfg" >>~/.bashrc
-        echo "" >>~/.bashrc
+# function to add customizations to .bashrc file in che home directory passed as parameter
+doBashrcAdd() {
 
-        #add customizations to .bashrc from file bashrc_customization.txt
-        while IFS= read -r line; do
-            echo "$line" >>~/.bashrc
-        done <$bashrc_customization_file
+    home=$1
 
-        # ask for create tmux.conf if not exists
-        echo "Create tmux.conf file? (y/n)"
-        read -r tmux
-        if [ "$tmux" = "y" ]; then
-            # copy tmux.conf file to home directory
-            cp $tmux_conf_file ~/.tmux.conf
-        fi
+    # if no parameter is passed, do for current user
+    if [ -z "$home" ]; then
+        home=$HOME
+    fi
+
+    echo "" >>$home/.bashrc
+    echo "" >>$home/.bashrc
+
+    # Add markers to .bashrc to easily find autoamtic part in the future
+    echo "##########START##########" >>$home/.bashrc
+    echo "########$todaydate#######" >>$home/.bashrc
+    echo "########################" >>$home/.bashrc
+
+    #ask for current configuration
+    echo "Insert current_cfg value (default is $(hostname)):"
+    read -r current_cfg
+    if [ -z "$current_cfg" ]; then
+        current_cfg=$(hostname)
+    fi
+
+    echo "" >>$home/.bashrc
+    echo "current_cfg=$current_cfg" >>$home/.bashrc
+    echo "" >>$home/.bashrc
+
+    #add customizations to .bashrc from file bashrc_customization.txt
+    while IFS= read -r line; do
+        echo "$line" >>$home/.bashrc
+    done <$bashrc_customization_file
+
+    # ask for create tmux.conf if not exists
+    echo "Create/overwrite also tmux.conf file? (y/n)"
+    read -r tmux
+    if [ "$tmux" = "y" ]; then
+        cp $tmux_conf_file $home/.tmux.conf
     fi
 }
+
 
 deleteTempFiles() {
     # delete temporary files
