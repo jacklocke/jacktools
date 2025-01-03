@@ -59,3 +59,7 @@ Is a simple script where add your own commands you need to launch on every new s
 
 -----
 
+I use in WSL sometimes, and need to convert files, so:
+```bash
+sed -i -e 's/\r$//' filename.sh
+```

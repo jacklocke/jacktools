@@ -259,7 +259,13 @@ doBashrcAdd() {
     cat $bashrc_customization_file >>$home/.bashrc
 
     # ask for create tmux.conf if not exists
-    echo "Create/overwrite also tmux.conf file? (y/n)"
+
+    # check if tmux.conf exists
+    if [ ! -f $home/.tmux.conf ]; then
+        echo "Create also tmux.conf file? (y/n)"
+    else
+        echo "$(printred 'Overwrite') tmux.conf file? (y/n)"
+    fi
     read -r tmux
     if [ "$tmux" = "y" ]; then
         cp $tmux_conf_file $home/.tmux.conf
