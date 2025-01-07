@@ -73,7 +73,7 @@ alias tren='tmux rename-session -t'
 # ****** CONTAINER aliases ******
 alias dockly='sudo docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock lirantal/dockly'
 alias dock="sudo docker ps -a | awk '{print \$1, \$2, \$10, \$11, \$12, \$13}'"
-#alias lazydocker='sudo docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /.config/lazydocker/:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
+alias lazydocker='sudo docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /.config/lazydocker/:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 
 # ****** PERSONAL aliases ******
 ## Get IP address
