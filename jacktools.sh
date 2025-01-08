@@ -75,6 +75,7 @@ mainmenu() {
     line
         echo -ne "
 $(printred '1) Add') GIT tools
+$(printmagenta '2)') Tools
 $(printmagenta '9)') First Configuration | $(printred '0)') Exit
 
 Choose an option:  "
@@ -86,6 +87,12 @@ Choose an option:  "
         logo
         line
         source ./tgit.sh
+        ;;
+    2)
+        clear
+        logo
+        line
+        source ./ttools.sh
         ;;
     9)
         clear
