@@ -38,6 +38,7 @@ header() {
 
     echo -ne " Tools 
 $(printblue '1)') update & upgrade
+$(printpurple '2)') check free space (current directory)
 
 $(printgreen '9)') Go Back to MAIN MENU
 $(printred '0)') Exit
@@ -49,6 +50,13 @@ Choose an option:  "
         clear
         line
         updateSystem
+        line
+        ttoolsmenu
+        ;;
+    2)
+        clear
+        line
+        checkFreeSpace
         line
         ttoolsmenu
         ;;
@@ -74,6 +82,10 @@ Choose an option:  "
 updateSystem() {
     sudo apt update
     sudo apt upgrade -y
+}
+
+checkFreeSpace() {
+    du -sh ./* | sort -h 
 }
 
 ttoolsmenu() {
