@@ -4,3 +4,4 @@ curl
 wget
 powerline
 tmux
+nano

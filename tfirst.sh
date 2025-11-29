@@ -198,9 +198,22 @@ installCommonPackages() {
     #read list
     mapfile -t packages <"$mypackages_file"
 
+    sudoispresent=1
+
+    # check if sudo is present on this system
+    if ! dpkg -s sudo >/dev/null 2>&1; then
+        echo "Can't find sudo on this system. Trying to install packages without sudo."
+        sudoispresent=0
+    fi
+
+
     for i in "${packages[@]}"; do
         echo "Installing $i"
-        sudo apt install -y "$i"
+        if [ $sudoispresent -eq 1 ]; then
+            sudo apt install -y "$i"
+        else
+            apt install -y "$i"
+        fi
     done
 }
 
