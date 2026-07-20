@@ -1,7 +1,0 @@
-zip
-unzip
-curl
-wget
-powerline
-tmux
-nano

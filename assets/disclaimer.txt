@@ -1,0 +1,6 @@
+JackTools modifica configurazioni critiche del sistema, incluse rete, SSH,
+utenti e pacchetti. Sono previsti backup e rollback, ma una modifica remota
+della rete puo comunque interrompere la sessione. Assicurarsi di disporre di
+accesso alla console e di backup verificati prima di continuare.
+
+Nessuna responsabilità può essere attribuita al prodotto "AS IS".

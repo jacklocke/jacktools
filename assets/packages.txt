@@ -1,0 +1,11 @@
+# Il secondo campo opzionale puo essere soltanto "default".
+zip default
+unzip default
+curl default
+wget default
+powerline default
+tmux default
+nano default
+git default
+htop default
+vim

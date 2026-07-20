@@ -1,123 +1,122 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-tput init # reset colors
-clear
+readonly JACKTOOLS_VERSION="1.0.0"
+JACKTOOLS_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly JACKTOOLS_DIR
 
-### Colors ##
-ESC=$(printf '\033') RESET="${ESC}[0m"
-BLACK="${ESC}[30m" RED="${ESC}[31m" GREEN="${ESC}[32m" YELLOW="${ESC}[33m"
-BLUE="${ESC}[34m" MAGENTA="${ESC}[35m" CYAN="${ESC}[36m" WHITE="${ESC}[37m"
-PURPLE="${ESC}[35m"
-# background
-BGRED="${ESC}[41m" BGBLUE="${ESC}[44m" BGWHITE="${ESC}[47m"
+for library in common hostname network ssh users customization packages cleanup; do
+    # shellcheck source=/dev/null
+    source "$JACKTOOLS_DIR/lib/$library.sh"
+done
 
-DEFAULT="${ESC}[39m"
+install_traps
 
-### Color Functions ##
-printgreen() { printf "${GREEN}%s${RESET}\n" "$1"; }
-printblue() { printf "${BLUE}%s${RESET}\n" "$1"; }
-printred() { printf "${RED}%s${RESET}\n" "$1"; }
-printyellow() { printf "${YELLOW}%s${RESET}\n" "$1"; }
-printmagenta() { printf "${MAGENTA}%s${RESET}\n" "$1"; }
-printcyan() { printf "${CYAN}%s${RESET}\n" "$1"; }
-printpurple() { printf "${PURPLE}%s${RESET}\n" "$1"; }
+usage() {
+    cat <<'EOF'
+Uso: jacktools.sh [comando]
 
-printBGblue() { printf "${BGBLUE}%s${RESET}\n" "$1"; }
-printBGred() { printf "${BGRED}%s${RESET}\n" "$1"; }
-printBGwhite() { printf "${BGWHITE}%s${RESET}\n" "$1"; }
-
-### Common function ##
-fn_bye() { clear; echo "Bye bye!"; exit 0; }
-fn_fail() {
-    #echo "Wrong option. [$1]";
-    #exit 1;
-    line
-    read -p "$(printBGred 'Wrong option!') You want to exit and launch [$(printred $2 $3 $4 $5 $6 $7 $8 $9)]? (y/n)" -n 1 -r
-    echo #new line
-    if [[ $REPLY =~ ^[Yy]$ ]]
-    then
-        echo "Bye bye"
-        line
-        echo
-        $2 $3 $4 $5 $6 $7 $8 $9
-        echo
-        exit 0
-    else
-        $1 #relaunch menu
-    fi
-    $2 #relaunch menu
+Comandi:
+  menu                  Mostra il menu interattivo
+  all                   Esegue la configurazione completa
+  hostname              Configura l'hostname
+  network               Configura la rete con Netplan
+  admin-user            Crea o verifica un amministratore
+  remove-ubuntu-user    Elimina in sicurezza l'utente ubuntu
+  bashrc                Applica la personalizzazione Bash
+  packages              Aggiorna il sistema e installa programmi
+  cleanup               Elimina i file temporanei JackTools
+  help, --help           Mostra questo aiuto
+  version               Mostra la versione
+EOF
 }
 
-### line of width of current terminal ##
-line() {
-    l=''
-    for i in $(seq $(tput cols)); do
-        l="$l═"
-    done
-    echo $l
-}
-
-# warning sign
-warning() {
-echo -ne "
-██╗    ██╗ █████╗ ██████╗ ███╗   ██╗██╗███╗   ██╗ ██████╗
-██║    ██║██╔══██╗██╔══██╗████╗  ██║██║████╗  ██║██╔════╝
-██║ █╗ ██║███████║██████╔╝██╔██╗ ██║██║██╔██╗ ██║██║  ███╗
-██║███╗██║██╔══██║██╔══██╗██║╚██╗██║██║██║╚██╗██║██║   ██║
-╚███╔███╔╝██║  ██║██║  ██║██║ ╚████║██║██║ ╚████║╚██████╔╝
- ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝╚═╝  ╚═══╝ ╚═════╝
-"
-}
-
-mainmenu() {
-    clear
-    logo
-    line
-        echo -ne "
-$(printred '1) Add') GIT tools
-$(printmagenta '2)') Tools
-$(printmagenta '9)') First Configuration | $(printred '0)') Exit
-
-Choose an option:  "
-
-    read -r ans
-    case $ans in
-    1)
-        clear
-        logo
-        line
-        source ./tgit.sh
-        ;;
-    2)
-        clear
-        logo
-        line
-        source ./ttools.sh
-        ;;
-    9)
-        clear
-        logo
-        line
-        source ./tfirst.sh
-        ;;
-    0)
-        fn_bye
-        ;;
-    *)
-        fn_fail "tmainmenu" $ans
-        ;;
+run_mutating_command() {
+    local command_name="$1" command_rc=0
+    require_disclaimer || return "$?"
+    preflight_for "$command_name"
+    case "$command_name" in
+        all) run_all ;;
+        hostname) configure_hostname ;;
+        network) configure_network ;;
+        admin-user) create_admin_user ;;
+        remove-ubuntu-user) remove_ubuntu_user ;;
+        bashrc) customize_bashrc ;;
+        packages)
+            manage_packages || command_rc=$?
+            offer_cleanup "$command_rc"
+            return "$command_rc"
+            ;;
+        cleanup) cleanup_jacktools ;;
+        *) die "comando sconosciuto: $command_name" ;;
     esac
-
 }
 
-logo() {
-echo -ne "      /¯/  ____ _  _____   /¯/__ /_¯ __/ ____   ____    /¯/   _____
- __  / /  / __ \`/ / ___/  / //_/  / /   / __ \ / __ \  / /   / ___/
-/ /_/ /  / /_/ / / /__   /  <    / /   / /_/ // /_/ / / /   (__  ) 
-\____/   \__,_/  \___/  /_/|_|  /_/    \____/ \____/ /_/   /____/
-"
+run_all() {
+    local phase rc=0
+    for phase in hostname network admin-user bashrc packages remove-ubuntu-user; do
+        case "$phase" in
+            hostname) configure_hostname || rc=1 ;;
+            network) configure_network || rc=1 ;;
+            admin-user) create_admin_user || rc=1 ;;
+            bashrc) customize_bashrc || rc=1 ;;
+            packages) manage_packages || rc=1 ;;
+            remove-ubuntu-user) remove_ubuntu_user || rc=1 ;;
+        esac
+        print_section_separator
+    done
+    print_summary
+    offer_cleanup "$rc"
+    return "$rc"
 }
 
-line
-logo
-mainmenu
+main_menu() {
+    local choice
+    while true; do
+        print_header
+        printf '\n%s%s1. Esegui configurazione completa%s\n\n' "$GREEN" "$BOLD" "$RESET"
+        printf '%s' "$GREEN"
+        cat <<'EOF'
+2. Configura hostname
+3. Configura rete
+4. Crea utente amministrativo
+5. Elimina utente ubuntu
+6. Applica personalizzazione Bash
+7. Installa o aggiorna programmi
+8. Pulizia file temporanei
+0. Esci
+EOF
+        printf '%s' "$RESET"
+        read -r -p "Scelta (vuoto per uscire): " choice || return 0
+        case "$choice" in
+            1) run_mutating_command all || true ;;
+            2) run_mutating_command hostname || true ;;
+            3) run_mutating_command network || true ;;
+            4) run_mutating_command admin-user || true ;;
+            5) run_mutating_command remove-ubuntu-user || true ;;
+            6) run_mutating_command bashrc || true ;;
+            7) run_mutating_command packages || true ;;
+            8) run_mutating_command cleanup || true; return 0 ;;
+            0) return 0 ;;
+            '') return 0 ;;
+            *) warn "scelta non valida." ;;
+        esac
+    done
+}
+
+main() {
+    local command_name="${1:-menu}" rc=0
+    case "$command_name" in
+        help|--help|-h) usage ;;
+        version) printf 'JackTools %s\n' "$JACKTOOLS_VERSION" ;;
+        menu) require_disclaimer || return 0; main_menu ;;
+        all|hostname|network|admin-user|remove-ubuntu-user|bashrc|packages|cleanup)
+            run_mutating_command "$command_name" || rc=$?
+            if [[ "$command_name" != all ]]; then print_summary || rc=1; fi
+            return "$rc"
+            ;;
+        *) usage >&2; die "comando sconosciuto: $command_name" ;;
+    esac
+}
+
+main "$@"
