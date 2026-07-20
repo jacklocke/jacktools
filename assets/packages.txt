@@ -2,10 +2,12 @@
 zip default
 unzip default
 curl default
-wget default
-powerline default
+wget
+powerline
 tmux default
 nano default
-git default
-htop default
+git
+htop
 vim
+cmatrix
+docker

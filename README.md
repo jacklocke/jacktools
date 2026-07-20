@@ -30,12 +30,14 @@ jacktools/
 │   ├── ssh.sh
 │   ├── users.sh
 │   ├── customization.sh
+│   ├── docker.sh
 │   ├── packages.sh
 │   └── cleanup.sh
 └── tests/
     ├── run_tests.sh
     ├── test_helper.sh
     ├── test_bootstrap_manifest.sh
+    ├── test_docker.sh
     ├── test_hostname_transaction.sh
     ├── test_packages_parser.sh
     ├── test_validation.sh
@@ -110,7 +112,9 @@ vim
 
 Il primo campo è un nome pacchetto APT validato. L’unico secondo campo ammesso è `default`, che preseleziona la voce. Opzioni e campi arbitrari sono rifiutati. La lista iniziale comprende `zip`, `unzip`, `curl`, `wget`, `powerline`, `tmux` e `nano`. Dopo la conferma JackTools esegue sempre `apt-get update` prima di qualsiasi installazione o upgrade; se questo aggiornamento preliminare fallisce, la funzione si interrompe. La checklist aggiunge “Aggiornamento generale del sistema” seguito dalla versione corrente, per esempio “Ubuntu 24.04 LTS”; questa voce controlla `apt-get upgrade -y` e non esegue automaticamente `dist-upgrade` o `full-upgrade`.
 
-I pacchetti già installati non vengono reinstallati. `tmux` può copiare `assets/tmux.conf` nella home di un utente dopo backup e conferma. Docker è intenzionalmente l’unica funzione incompleta: stampa `TODO questa sezione va completata` e assume lo stato `NON IMPLEMENTATO`; non tenta installazioni parziali.
+I pacchetti già installati non vengono reinstallati. `tmux` può copiare `assets/tmux.conf` nella home di un utente dopo backup e conferma.
+
+Se viene selezionato Docker, JackTools segue la procedura del repository APT descritta nella [guida ufficiale Docker per Ubuntu](https://docs.docker.com/engine/install/ubuntu/): rileva e, dopo conferma, rimuove i pacchetti in conflitto; installa certificati e chiave ufficiale; configura `docker.sources`; installa Docker Engine, CLI, containerd e Buildx; abilita il servizio e verifica l’installazione con `hello-world`. Al termine chiede separatamente se installare Docker Compose Plugin, disponibile con il comando `docker compose`. JackTools non aggiunge automaticamente utenti al gruppo `docker`, perché tale gruppo concede privilegi equivalenti a root.
 
 ## Personalizzazione
 
@@ -146,7 +150,8 @@ Utente amministrativo              OK
 Personalizzazione Bash             OK
 Aggiornamento sistema              OK
 tmux                               OK
-docker                             NON IMPLEMENTATO
+docker                             OK
+Docker Compose                     SALTATO
 Eliminazione utente ubuntu         SALTATO
 Pulizia temporanei                 NON ESEGUITA
 
@@ -164,7 +169,7 @@ I test usano una radice temporanea e `JACKTOOLS_TEST_MODE=1`; non modificano il 
 bash tests/run_tests.sh
 ```
 
-Coprono manifest e sintassi dei file scaricati dal bootstrap, parser e flag dei pacchetti, input malevoli, validazioni hostname/rete/DNS, idempotenza di `.bashrc` e `authorized_keys`, protezione dell’utente corrente, rollback Netplan, ripristino SSH, percorso di pulizia e stato Docker.
+Coprono manifest e sintassi dei file scaricati dal bootstrap, parser e flag dei pacchetti, input malevoli, validazioni hostname/rete/DNS, idempotenza di `.bashrc` e `authorized_keys`, protezione dell’utente corrente, rollback Netplan, ripristino SSH, percorso di pulizia e validazioni Docker.
 
 Con ShellCheck installato:
 

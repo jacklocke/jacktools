@@ -25,13 +25,18 @@ assert_true 'apt-get update e il comando preliminare' grep -Fqx 'MOCK: apt-get u
 rm -f -- "$command_log"
 
 assert_true 'lista programmi reale valida' parse_packages_file "$ROOT/assets/packages.txt"
-for required_package in zip unzip curl wget powerline tmux nano; do
+for required_package in zip unzip curl wget powerline tmux nano docker; do
     if printf '%s\n' "${PACKAGE_NAMES[@]}" | grep -Fxq "$required_package"; then
         pass "pacchetto richiesto presente: $required_package"
     else
         fail "pacchetto richiesto presente: $required_package"
     fi
 done
+docker_index=''
+for index in "${!PACKAGE_NAMES[@]}"; do
+    [[ "${PACKAGE_NAMES[$index]}" == docker ]] && docker_index="$index"
+done
+assert_eq 'Docker disponibile ma non preselezionato' 0 "${PACKAGE_DEFAULTS[$docker_index]}"
 printf 'curl --force\n' >"$temporary"
 assert_false 'flag sconosciuto rifiutato' parse_packages_file "$temporary"
 printf '%s\n' '--option default' >"$temporary"

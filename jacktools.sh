@@ -5,7 +5,7 @@ readonly JACKTOOLS_VERSION="1.0.0"
 JACKTOOLS_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly JACKTOOLS_DIR
 
-for library in common hostname network ssh users customization packages cleanup; do
+for library in common hostname network ssh users customization docker packages cleanup; do
     # shellcheck source=/dev/null
     source "$JACKTOOLS_DIR/lib/$library.sh"
 done

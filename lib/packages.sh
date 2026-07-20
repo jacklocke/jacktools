@@ -68,12 +68,10 @@ install_apt_package() {
     if DEBIAN_FRONTEND=noninteractive run_cmd apt-get install -y -- "$package"; then set_status "$package" OK; else set_status "$package" FALLITO; return 1; fi
 }
 
-install_docker_placeholder() { printf 'TODO questa sezione va completata\n'; set_status docker 'NON IMPLEMENTATO'; return 0; }
-
 install_package_dispatch() {
     local package="$1"
     case "$package" in
-        docker) install_docker_placeholder ;;
+        docker) install_docker ;;
         tmux) install_apt_package tmux && install_tmux_configuration ;;
         *) install_apt_package "$package" ;;
     esac

@@ -7,6 +7,7 @@ source "$ROOT/lib/common.sh"
 source "$ROOT/lib/network.sh"
 source "$ROOT/lib/ssh.sh"
 source "$ROOT/lib/users.sh"
+source "$ROOT/lib/docker.sh"
 source "$ROOT/lib/packages.sh"
 source "$ROOT/lib/cleanup.sh"
 
@@ -38,6 +39,8 @@ assert_false 'root rifiutata dalla cleanup' safe_cleanup_path /
 assert_false '/tmp rifiutata dalla cleanup' safe_cleanup_path /tmp
 assert_true 'percorso bootstrap esatto accettato' safe_bootstrap_cleanup_path /tmp/jacktools-bootstrap.sh
 assert_false 'bootstrap fuori percorso rifiutato' safe_bootstrap_cleanup_path /tmp/altro.sh
-install_docker_placeholder >/dev/null
-assert_eq 'Docker non implementato' 'NON IMPLEMENTATO' "${JT_STATUS[docker]}"
+assert_true 'architettura Docker amd64 supportata' docker_supported_architecture amd64
+assert_false 'architettura Docker malevola rifiutata' docker_supported_architecture '--privileged'
+assert_true 'Ubuntu 24.04 supportato da Docker' docker_supported_ubuntu_version 24.04
+assert_false 'Ubuntu obsoleto rifiutato da Docker' docker_supported_ubuntu_version 18.04
 finish_tests

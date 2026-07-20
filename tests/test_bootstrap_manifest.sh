@@ -17,7 +17,7 @@ expected=(
     assets/header.txt assets/disclaimer.txt assets/packages.txt
     assets/bashrc_customization assets/tmux.conf
     lib/common.sh lib/hostname.sh lib/network.sh lib/ssh.sh
-    lib/users.sh lib/customization.sh lib/packages.sh lib/cleanup.sh
+    lib/users.sh lib/customization.sh lib/docker.sh lib/packages.sh lib/cleanup.sh
 )
 
 assert_eq 'manifest bootstrap completo' "$(printf '%s\n' "${expected[@]}" | sort)" "$(printf '%s\n' "${manifest[@]}" | sort)"
