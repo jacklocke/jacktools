@@ -2,9 +2,13 @@
 set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# shellcheck disable=SC1091 # Percorso calcolato a runtime.
 source "$ROOT/tests/test_helper.sh"
+# shellcheck disable=SC2034 # Variabile consumata dalle librerie caricate dinamicamente.
 JACKTOOLS_TEST_MODE=1 JACKTOOLS_DIR="$ROOT"
+# shellcheck disable=SC1091 # Percorso calcolato a runtime.
 source "$ROOT/lib/common.sh"
+# shellcheck disable=SC1091 # Percorso calcolato a runtime.
 source "$ROOT/lib/docker.sh"
 
 work=$(mktemp -d); trap 'rm -rf -- "$work"' EXIT
@@ -18,6 +22,9 @@ assert_true 'repository Docker usa URL ufficiale' grep -Fqx 'URIs: https://downl
 assert_true 'repository Docker usa codename Ubuntu' grep -Fqx 'Suites: noble' "$work/docker.sources"
 assert_true 'repository Docker usa architettura rilevata' grep -Fqx 'Architectures: amd64' "$work/docker.sources"
 assert_true 'repository Docker usa keyring dedicato' grep -Fqx 'Signed-By: /etc/apt/keyrings/docker.asc' "$work/docker.sources"
+
+dpkg-query() { return 1; }
+assert_true 'assenza di conflitti Docker non genera errore' installed_docker_conflicts
 
 assert_true 'setup repository Docker simulato riuscito' setup_docker_repository noble amd64
 assert_true 'chiave Docker installata nel keyring simulato' test -s "$JACKTOOLS_ROOT/etc/apt/keyrings/docker.asc"

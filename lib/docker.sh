@@ -38,8 +38,11 @@ installed_docker_conflicts() {
     local package
     local -a conflicts=(docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc)
     for package in "${conflicts[@]}"; do
-        dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -Fq 'install ok installed' && printf '%s\n' "$package"
+        if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -Fq 'install ok installed'; then
+            printf '%s\n' "$package"
+        fi
     done
+    return 0
 }
 
 restore_docker_repository_file() {
