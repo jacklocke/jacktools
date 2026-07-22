@@ -1,4 +1,3 @@
-
 welcome=0
 
 if [ "$current_cfg" = "TARS" ]; then
@@ -60,6 +59,27 @@ if [ $welcome -eq 0 ]; then
   echo "░█▄█░█▀▀░█░░░█░░░█░█░█░█░█▀▀░▀"
   echo "░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░▀▀▀░▀"
 fi
+
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+printf "🖥  Hostname        : %s\n" "$(hostname)"
+printf "💻 OS              : %s\n" "$(grep PRETTY_NAME /etc/os-release | cut -d= -f2 | tr -d '"')"
+printf "⚡ CPU             : %s\n" "$(lscpu | awk -F: '/Model name/{gsub(/^[ \t]+/,"",$2); print $2; exit}')"
+printf "🧠 Memory          : %s / %s\n" \
+"$(free -h | awk '/Mem:/ {print $3}')" \
+"$(free -h | awk '/Mem:/ {print $2}')"
+
+printf "💾 Root Disk       : %s / %s (%s)\n" \
+"$(df -h / | awk 'NR==2 {print $3}')" \
+"$(df -h / | awk 'NR==2 {print $2}')" \
+"$(df -h / | awk 'NR==2 {print $5}')"
+
+printf "⏱  Uptime          : %s\n" "$(uptime -p)"
+printf "🐳 Docker          : %s running containers\n" "$(docker ps -q | wc -l)"
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
 
 # ****** POWERLINE configuration ******
 if [ -f /usr/share/powerline/bindings/bash/powerline.sh ]; then
