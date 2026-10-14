@@ -1,0 +1,10 @@
+# Project-wide ShellCheck settings (see CLAUDE.md, section 10).
+# Libraries are sourced at runtime from JACKTOOLS_DIR: their paths cannot be followed.
+disable=SC1091
+# Step functions (<id>_collect, <id>_apply, ...) are called by name by the step engine,
+# and tests redefine helpers as doubles: single-file analysis sees them as unreachable.
+disable=SC2317
+# Globals shared across sourced files, nameref targets and arrays passed by name to
+# ui_menu/ui_checklist look unused to single-file analysis. Review real dead variables with:
+#   shellcheck --norc -i SC2034 bootstrap.sh jacktools.sh lib/*/*.sh
+disable=SC2034

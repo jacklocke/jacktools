@@ -7,4 +7,5 @@ for test_file in "$ROOT"/tests/test_*.sh; do
     printf '\n== %s ==\n' "${test_file##*/}"
     bash "$test_file" || rc=1
 done
+(( rc == 0 )) && printf '\nALL TESTS PASSED\n' || printf '\nSOME TESTS FAILED\n' >&2
 exit "$rc"

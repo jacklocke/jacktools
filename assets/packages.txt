@@ -1,13 +1,19 @@
-# Il secondo campo opzionale puo essere soltanto "default".
+# Programmi proposti nella fase Installazioni.
+# Formato: un pacchetto APT per riga; "default" lo preseleziona nella checklist.
+# Docker e unattended-upgrades hanno passi dedicati e non vanno elencati qui.
 zip default
 unzip default
 curl default
-wget
-powerline
-tmux default
+wget default
 nano default
+tmux default
+powerline default
 git
-htop
+htop default
 vim
+ncdu
+at
+figlet
+bat
+fail2ban
 cmatrix
-docker
