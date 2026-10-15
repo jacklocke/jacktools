@@ -1,4 +1,4 @@
-# JackTools 2.0
+# JackTools 2.1
 
 Prepara e mantiene un **Ubuntu Server 22.04+** da un menu in Bash: sistema, programmi, utenti, sicurezza e manutenzione.
 Prima di cambiare qualcosa mostra il riepilogo e chiede conferma. Fa sempre un backup e, se qualcosa va storto, torna indietro.
@@ -55,14 +55,27 @@ Opzioni:
 2. Copiare il file sul nuovo server: `scp /root/jacktools-*.conf nuovo-server:/root/`
 3. Lanciare il comando stampato dall'export, cioè l'avvio qui sopra con in fondo `-- all --config /root/<file>.conf`.
 
+## Cronologia dei comandi
+
+Modulo *Cronologia* in Utenti → Personalizzazioni (non selezionato di default).
+
+- **↑/↓**: scrivi l'inizio di un comando (es. `sys`) e scorri solo i comandi che iniziano così.
+- **Ctrl-R**: ricerca fuzzy, se è installato `fzf` (proposto tra i programmi).
+- **Tab**: mostra subito le alternative e ignora maiuscole/minuscole.
+- **Cronologia**: 10000 comandi con data e ora, salvati dopo ogni comando (anche chiudendo un pannello tmux).
+
 ## Menu tmux al login
 
-All'accesso propone di riprendere una sessione tmux o di crearne una nuova. Se non premi nulla per qualche secondo, resti nella normale shell.
+All'accesso propone di riprendere una sessione tmux o di crearne una nuova.
+
+- **Nessuna sessione aperta**: se non premi nulla per qualche secondo, crea la sessione `A` e ti ci collega.
+- **Sessioni aperte**: mostra l'elenco e aspetta la tua scelta, senza limite di tempo.
 
 - **Attivarlo**: Utenti → Personalizzazioni, voce *Menu tmux al login* (non selezionata di default). Serve tmux, proposto tra i programmi.
 - **Dove finisce**: lo script in `~/.local/bin/tmux-login-menu.sh`; il lancio nel blocco JackTools del `.bashrc`, solo per le shell di login e fuori da tmux.
 - **Tasti**: ↑/↓ scegli · → o Invio entra (o crea) · ← o Esc resta nella shell · al detach da tmux torni alla shell.
-- **Attesa**: `TIMEOUT=5` in testa allo script (`0` = nessuna uscita automatica).
+- **Attesa**: `TIMEOUT=5` in testa allo script (`0` = la sessione `A` non parte mai da sola). Premendo un tasto il conto alla rovescia si ferma.
+- **Caratteri sporchi** (`^[[?61;…c`): sono risposte del terminale (es. Windows Terminal) alle richieste di tmux. Nelle sessioni create dal menu la prima shell le scarta per `DRAIN=0.3` secondi; quello che scrivi in quell'istante va perso.
 - **Disattivarlo**: rilanciare le personalizzazioni togliendo la voce. Lo script resta in `~/.local/bin` ma non parte più.
 
 Non interviene con scp, sftp, rsync o `ssh host comando`: parte solo con un terminale interattivo.
@@ -94,32 +107,3 @@ Ogni file nuovo va aggiunto anche a `MANIFEST`.
 - Log: `/var/log/jacktools.log`
 - Backup: `/var/backups/jacktools/`
 - Copia temporanea: `/tmp/jacktools`
-
-## Sviluppo
-
-Si lavora su una copia locale del repository, senza bootstrap né download. Meglio usare una VM o un container di prova, non il server di produzione.
-
-```bash
-cd jacktools2.0
-bash tests/run_tests.sh                     # tutti i test: radice finta, nessuna modifica al sistema
-bash tests/test_network.sh                  # un solo gruppo di test
-shellcheck bootstrap.sh jacktools.sh lib/*/*.sh tests/*.sh
-
-sudo bash jacktools.sh --dry-run            # menu completo: domande e riepilogo, nessuna modifica
-sudo bash jacktools.sh hostname --dry-run   # un solo passo
-sudo bash jacktools.sh status               # stato del sistema, sola lettura
-sudo bash bootstrap.sh --local . -- --dry-run   # come sopra, passando dal bootstrap
-```
-
-Lancio effettivo dalla copia locale, con le modifiche applicate davvero:
-
-```bash
-sudo bash jacktools.sh                      # menu interattivo
-sudo bash jacktools.sh all                  # configurazione completa
-sudo bash jacktools.sh network              # un solo passo
-sudo bash bootstrap.sh --local .            # stesso risultato, passando dal bootstrap
-```
-
-I file originali restano in `/var/backups/jacktools/`. La pulizia finale elimina solo `/tmp/jacktools`, mai la cartella di sviluppo.
-
-Regole e architettura: `CLAUDE.md`.

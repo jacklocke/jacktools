@@ -15,5 +15,6 @@ ncdu
 at
 figlet
 bat
+fzf
 fail2ban
 cmatrix

@@ -39,6 +39,7 @@ assets/bashrc.d/10-locale.sh
 assets/bashrc.d/20-banner.sh
 assets/bashrc.d/30-sysinfo.sh
 assets/bashrc.d/40-powerline.sh
+assets/bashrc.d/45-history.sh
 assets/bashrc.d/50-tmux-aliases.sh
 assets/bashrc.d/60-docker-aliases.sh
 assets/bashrc.d/70-useful-aliases.sh

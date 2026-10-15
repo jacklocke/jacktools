@@ -18,16 +18,16 @@ CFG[BANNER]=welcome CFG["CUSTOM_MODULES:x"]='locale banner tmux-aliases'
 assert_contains 'block renders with errexit on' 'alias tnew=' "$(set -e; custom_render_block x)"
 assert_eq 'module header lines stripped' 0 "$(custom_render_block x | grep -c 'jt-module:')"
 assert_contains 'module files in order' 'locale' "$(custom_render_block x | grep '^# --- ' | head -1)"
-assert_eq 'modules in order' 'locale banner sysinfo powerline tmux-aliases docker-aliases useful-aliases fun drin tmux-login-menu' "${CUSTOM_MOD_IDS[*]}"
-assert_eq 'module defaults (drin and tmux login menu off)' '1 1 1 1 1 0 0 0 0 0' "${CUSTOM_MOD_DEFAULT[*]}"
+assert_eq 'modules in order' 'locale banner sysinfo powerline history tmux-aliases docker-aliases useful-aliases fun drin tmux-login-menu' "${CUSTOM_MOD_IDS[*]}"
+assert_eq 'module defaults (history, drin and tmux login menu off)' '1 1 1 1 0 1 0 0 0 0 0' "${CUSTOM_MOD_DEFAULT[*]}"
 assert_eq 'banners from files' 'C3 TARS UMB welcome zima zimalxc' "$(banners_list | LC_ALL=C sort | xargs)"
 assert_eq 'banner suggested by hostname (case-insensitive)' TARS "$(banner_suggested)"
 printf 'other\n' >"$JACKTOOLS_ROOT/etc/hostname"
 assert_eq 'welcome when no banner matches' welcome "$(banner_suggested)"
 printf 'tars\n' >"$JACKTOOLS_ROOT/etc/hostname"
 
-# Users: jack (operator) preselected; modules default + useful-aliases (7); banner default.
-customize_collect >"$WORK/out" 2>&1 <<<$'\n7\n\n'
+# Users: jack (operator) preselected; modules default + useful-aliases (8); banner default.
+customize_collect >"$WORK/out" 2>&1 <<<$'\n8\n\n'
 assert_contains 'users listed with uid and shell' 'jack (uid 1000, /bin/bash)' "$(cat "$WORK/out")"
 assert_contains 'root offered' 'root (amministratore di sistema)' "$(cat "$WORK/out")"
 assert_eq 'operator selected' jack "${CFG[CUSTOM_USERS]}"
@@ -79,7 +79,7 @@ printf 'docker:x:999:\n' >>"$WORK/group"
 customize_collect >"$WORK/out" 2>&1 <<EOF2
 1 2
 
-1 2 3 4 5 11 12 13 14
+1 2 3 4 6 12 13 14 15
 
 y
 $key
@@ -141,6 +141,14 @@ assert_false 'no warning when at is being installed' grep -q 'richiede at' <<<"$
 unset -f command_exists
 source "$ROOT/lib/core/exec.sh"
 CFG[PACKAGES]=''
+
+# ---- history module: bigger history, saved after every command, no bind warnings without a terminal
+CFG[CUSTOM_USERS]=jack CFG["CUSTOM_MODULES:jack"]='history' CFG["CUSTOM_EXTRAS:jack"]='' CFG[BANNER]=none
+customize_apply
+assert_true 'verify with history' customize_verify
+hist_out=$(HOME="$home" bash --norc -i -c "PROMPT_COMMAND=pl; source '$home/.bashrc'; source '$home/.bashrc'; printf '%s|%s' \"\$HISTSIZE\" \"\$PROMPT_COMMAND\"" 2>&1 </dev/null)
+assert_eq 'history size and PROMPT_COMMAND (once, before the existing one)' '10000|history -a;pl' "$(tail -n1 <<<"$hist_out")"
+assert_false 'no bind warning without a terminal' grep -q 'line editing' <<<"$hist_out"
 
 # ---- Custom text banner (figlet)
 assert_true 'banner text valid' valid_banner_text 'Server 01'

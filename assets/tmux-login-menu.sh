@@ -7,7 +7,25 @@
 # termina solo lo script e non chiude mai la shell di login.
 # Dipendenze: solo bash e tmux.
 
-TIMEOUT=5   # secondi di inattività prima di uscire (0 = nessuna uscita automatica)
+TIMEOUT=5   # senza sessioni: secondi prima di creare e aprire la sessione A (0 = mai)
+DRAIN=0.3   # secondi in cui la prima shell di una nuova sessione scarta l'input
+
+# ---------------------------------------------------------------------------
+# Avvio della prima shell di una nuova sessione (--pane-start)
+# ---------------------------------------------------------------------------
+# All'avvio tmux chiede al terminale chi è (ESC[c, ESC[>c). Alcuni terminali,
+# per esempio Windows Terminal via SSH, rispondono due volte o in ritardo:
+# tmux passa le risposte in più alla shell, che le mostra come caratteri
+# sporchi (^[[?61;...c). Qui, senza eco, si attende DRAIN secondi, si scarta
+# l'input arrivato e poi si avvia la normale shell di login.
+if [ "$1" = --pane-start ]; then
+    stty -echo 2>/dev/null
+    sleep "$DRAIN" 2>/dev/null
+    while IFS= read -rs -t 0.05 -n 4096 _; do :; done
+    stty echo 2>/dev/null
+    [ -x "${SHELL:-}" ] || SHELL=/bin/bash
+    exec -l "$SHELL"
+fi
 
 # ---------------------------------------------------------------------------
 # Controlli di avvio: se uno fallisce si esce subito e in silenzio
@@ -127,7 +145,7 @@ draw_block() {
 
 # Testo del countdown (in REPLY)
 countdown_text() {
-    fit "Uscita automatica tra ${REMAINING}s — premi un tasto per restare"
+    fit "La sessione A parte tra ${REMAINING}s — premi un tasto per restare"
 }
 
 # Riscrive SOLO la riga del countdown (è sempre l'ultima del blocco)
@@ -179,7 +197,8 @@ read_key() {
 }
 
 # Attende un tasto gestendo il countdown di inattività.
-# Il primo tasto premuto ferma il timer per sempre (TIMER_JUST_STOPPED=1).
+# Il primo tasto premuto ferma il timer per sempre (TIMER_JUST_STOPPED=1);
+# a tempo scaduto KEY=EXPIRED.
 wait_key() {
     TIMER_JUST_STOPPED=0
     if (( ! TIMER_ON )); then
@@ -194,7 +213,7 @@ wait_key() {
             return
         fi
         (( REMAINING-- ))
-        (( REMAINING > 0 )) || exit 0   # tempo scaduto: il trap pulisce il menu
+        if (( REMAINING <= 0 )); then TIMER_ON=0; KEY=EXPIRED; return; fi
         update_countdown
     done
 }
@@ -249,6 +268,18 @@ default_name() {
     REPLY=
 }
 
+# Percorso assoluto di questo script, per --pane-start
+SELF=$(readlink -f -- "$0" 2>/dev/null) || SELF=
+
+# Crea la sessione $1 (o si collega se esiste già) con la prima shell avviata
+# da --pane-start
+new_session() {
+    if [ -n "$SELF" ] && [ -x "$SELF" ]; then
+        start_tmux new-session -A -s "$1" "$SELF" --pane-start
+    fi
+    start_tmux new-session -A -s "$1"
+}
+
 # Lancia tmux con gli argomenti dati dopo aver ripulito il terminale.
 # Niente exec: al detach (o alla fine della sessione) lo script termina
 # e si torna alla normale shell bash.
@@ -278,7 +309,8 @@ screen_empty() {
         wait_key
         (( TIMER_JUST_STOPPED )) && need=1   # rimuove la riga del countdown
         case "$KEY" in
-            RIGHT | ENTER) start_tmux new-session -s A ;;
+            # -A: se nel frattempo A è stata creata, ci si collega
+            RIGHT | ENTER | EXPIRED) new_session A ;;
             LEFT | ESC)    exit 0 ;;
         esac
     done
@@ -394,7 +426,7 @@ input_name() {
                 elif tmux has-session -t "=$final" 2>/dev/null; then
                     warn="Esiste già una sessione \"$final\": scegli un altro nome."
                 else
-                    start_tmux new-session -s "$final"
+                    new_session "$final"
                 fi
                 ;;
             CHAR)
@@ -414,9 +446,10 @@ input_name() {
 # Avvio
 # ---------------------------------------------------------------------------
 printf '%s' "$HIDE"
-(( TIMEOUT > 0 )) && TIMER_ON=1
 load_sessions
 if (( ${#S_NAME[@]} == 0 )); then
+    # countdown solo senza sessioni: con l'elenco si attende senza limite
+    (( TIMEOUT > 0 )) && TIMER_ON=1
     screen_empty
 else
     screen_list
