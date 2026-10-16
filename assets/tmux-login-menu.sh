@@ -354,7 +354,7 @@ draw_list() {
         fi
     done
 
-    fit "↑/↓ scegli · → o Invio conferma · ← o Esc esci"; lines+=("$REPLY")
+    fit "↑/↓ scegli · → o Invio conferma · Spazio rinomina · ← o Esc esci"; lines+=("$REPLY")
     (( TIMER_ON )) && { countdown_text; lines+=("$REPLY"); }
     draw_block "${lines[@]}"
 }
@@ -382,24 +382,41 @@ screen_list() {
                 load_sessions
                 need=1
                 ;;
+            CHAR)
+                # Spazio su una sessione: la rinomina e si resta nel menu
+                if [ "$KEYCHAR" = ' ' ] && (( SEL < n - 1 )); then
+                    input_name "${S_NAME[SEL]}"
+                    load_sessions
+                    need=1
+                fi
+                ;;
             LEFT | ESC) exit 0 ;;
         esac
     done
 }
 
 # ---------------------------------------------------------------------------
-# Inserimento del nome di una nuova sessione
+# Inserimento del nome: nuova sessione, oppure rinomina della sessione $1
 # ---------------------------------------------------------------------------
 input_name() {
-    local name= warn= def final lines
+    local old=$1 name= warn= def= final lines i
     load_sessions
-    default_name; def=$REPLY
+    if [ -n "$old" ]; then
+        name=$old   # si parte dal nome attuale: Backspace per modificarlo
+    else
+        default_name; def=$REPLY
+    fi
     printf '%s' "$SHOW"
 
     while :; do
         term_size
         lines=()
-        fit "Nuova sessione tmux — lettere, cifre, _ e - (max $MAXLEN caratteri)"; lines+=("$REPLY")
+        if [ -n "$old" ]; then
+            fit "Rinomina la sessione \"$old\" — lettere, cifre, _ e - (max $MAXLEN caratteri)"
+        else
+            fit "Nuova sessione tmux — lettere, cifre, _ e - (max $MAXLEN caratteri)"
+        fi
+        lines+=("$REPLY")
         fit "Invio conferma · Esc torna al menu (anche ← a campo vuoto)"; lines+=("$REPLY")
         # riga dedicata agli avvisi (vuota se non ce ne sono)
         if [ -n "$warn" ]; then fit "! $warn"; else REPLY=; fi
@@ -421,10 +438,24 @@ input_name() {
             BACKSPACE) name=${name%?} ;;
             ENTER)
                 final=${name:-$def}
-                if [ -z "$final" ]; then
+                if [ -n "$old" ] && [ "$final" = "$old" ]; then
+                    return   # nome invariato
+                elif [ -z "$final" ] && [ -n "$old" ]; then
+                    warn="Inserisci il nuovo nome."
+                elif [ -z "$final" ]; then
                     warn="Inserisci un nome: le lettere A–Z sono già tutte usate."
                 elif tmux has-session -t "=$final" 2>/dev/null; then
                     warn="Esiste già una sessione \"$final\": scegli un altro nome."
+                elif [ -n "$old" ]; then
+                    if tmux rename-session -t "=$old" -- "$final" 2>/dev/null; then
+                        # la selezione resta sulla sessione rinominata
+                        load_sessions
+                        for (( i = 0; i < ${#S_NAME[@]}; i++ )); do
+                            [ "${S_NAME[i]}" = "$final" ] && SEL=$i
+                        done
+                        return
+                    fi
+                    warn="Rinomina non riuscita: la sessione \"$old\" esiste ancora?"
                 else
                     new_session "$final"
                 fi
