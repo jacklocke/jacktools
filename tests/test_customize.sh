@@ -142,6 +142,16 @@ unset -f command_exists
 source "$ROOT/lib/core/exec.sh"
 CFG[PACKAGES]=''
 
+# ---- powerline module: warning when the package is neither installed nor selected
+CFG[CUSTOM_USERS]=jack CFG["CUSTOM_MODULES:jack"]='powerline' CFG["CUSTOM_EXTRAS:jack"]='' CFG[BANNER]=none
+command_exists() { [[ "$1" != powerline ]] && command -v "$1" >/dev/null 2>&1; }
+assert_contains 'warning when powerline is missing' 'il modulo powerline richiede powerline' "$(customize_plan)"
+CFG[PACKAGES]='curl powerline'
+assert_false 'no warning when powerline is being installed' grep -q 'richiede powerline' <<<"$(customize_plan)"
+unset -f command_exists
+source "$ROOT/lib/core/exec.sh"
+CFG[PACKAGES]=''
+
 # ---- history module: bigger history, saved after every command, no bind warnings without a terminal
 CFG[CUSTOM_USERS]=jack CFG["CUSTOM_MODULES:jack"]='history' CFG["CUSTOM_EXTRAS:jack"]='' CFG[BANNER]=none
 customize_apply

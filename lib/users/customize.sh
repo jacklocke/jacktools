@@ -14,6 +14,7 @@ declare -gA CUSTOM_MODULE_FILES=(
 # Commands a module needs: the plan warns when they are neither installed nor selected
 # among the packages of this run.
 declare -gA CUSTOM_MODULE_NEEDS=(
+    [powerline]="powerline"
     [tmux-login-menu]="tmux"
     [drin]="figlet at"
 )

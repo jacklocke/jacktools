@@ -1,4 +1,4 @@
-# JackTools 2.1
+# JackTools 2.2.1
 
 Prepara e mantiene un **Ubuntu Server 22.04+** da un menu in Bash: sistema, programmi, utenti, sicurezza e manutenzione.
 Prima di cambiare qualcosa mostra il riepilogo e chiede conferma. Fa sempre un backup e, se qualcosa va storto, torna indietro.
@@ -55,6 +55,44 @@ Opzioni:
 2. Copiare il file sul nuovo server: `scp /root/jacktools-*.conf nuovo-server:/root/`
 3. Lanciare il comando stampato dall'export, cioè l'avvio qui sopra con in fondo `-- all --config /root/<file>.conf`.
 
+## Powerline
+
+Prompt e barra di tmux con powerline: pacchetto `powerline` (preselezionato tra i programmi), modulo *powerline* e voce `.tmux.conf` nelle personalizzazioni.
+
+- **Font**: di solito non serve installare nulla, perché Windows Terminal recente usa già Cascadia Mono, che ha i simboli. Se vedi quadratini o `?`, installa un Nerd Font **sul computer da cui ti colleghi** (sul server non serve nulla): comandi qui sotto.
+- **Senza il pacchetto**: il prompt resta normale e tmux parte senza errori; il riepilogo avvisa se il modulo è scelto ma powerline non verrà installato.
+
+### Installare un Nerd Font (lato client)
+
+Windows (PowerShell, senza privilegi di amministratore), con una delle due:
+
+```powershell
+winget install --id DEVCOM.JetBrainsMonoNerdFont -e     # se non lo trova: winget search "Nerd Font"
+```
+
+```powershell
+scoop bucket add nerd-fonts
+scoop install JetBrainsMono-NF
+```
+
+Poi in Windows Terminal: Impostazioni → Predefiniti → Aspetto → Tipo di carattere → **JetBrainsMono Nerd Font**, salva e riapri il terminale.
+
+macOS:
+
+```bash
+brew install --cask font-jetbrains-mono-nerd-font
+```
+
+Linux (desktop):
+
+```bash
+mkdir -p ~/.local/share/fonts && cd ~/.local/share/fonts \
+  && curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz \
+  && tar -xf JetBrainsMono.tar.xz && rm JetBrainsMono.tar.xz && fc-cache -f
+```
+
+Su macOS e Linux, poi, scegli **JetBrainsMono Nerd Font** nelle preferenze del terminale.
+
 ## Cronologia dei comandi
 
 Modulo *Cronologia* in Utenti → Personalizzazioni (non selezionato di default).
@@ -73,7 +111,7 @@ All'accesso propone di riprendere una sessione tmux o di crearne una nuova.
 
 - **Attivarlo**: Utenti → Personalizzazioni, voce *Menu tmux al login* (non selezionata di default). Serve tmux, proposto tra i programmi.
 - **Dove finisce**: lo script in `~/.local/bin/tmux-login-menu.sh`; il lancio nel blocco JackTools del `.bashrc`, solo per le shell di login e fuori da tmux.
-- **Tasti**: ↑/↓ scegli · → o Invio entra (o crea) · ← o Esc resta nella shell · al detach da tmux torni alla shell.
+- **Tasti**: ↑/↓ scegli · → o Invio entra (o crea) · Spazio rinomina la sessione selezionata · ← o Esc resta nella shell · al detach da tmux torni alla shell.
 - **Attesa**: `TIMEOUT=5` in testa allo script (`0` = la sessione `A` non parte mai da sola). Premendo un tasto il conto alla rovescia si ferma.
 - **Caratteri sporchi** (`^[[?61;…c`): sono risposte del terminale (es. Windows Terminal) alle richieste di tmux. Nelle sessioni create dal menu la prima shell le scarta per `DRAIN=0.3` secondi; quello che scrivi in quell'istante va perso.
 - **Disattivarlo**: rilanciare le personalizzazioni togliendo la voce. Lo script resta in `~/.local/bin` ma non parte più.
@@ -107,3 +145,4 @@ Ogni file nuovo va aggiunto anche a `MANIFEST`.
 - Log: `/var/log/jacktools.log`
 - Backup: `/var/backups/jacktools/`
 - Copia temporanea: `/tmp/jacktools`
+
