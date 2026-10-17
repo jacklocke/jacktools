@@ -31,7 +31,7 @@ cs_usage() {
     cat <<'EOF'
 Uso: bash tools/cambia-server-git.sh [opzioni]
 
-Aggiorna il server git di JackTools: default in bootstrap.sh e riferimenti nel README.
+Aggiorna il server git di JackTools: default in bootstrap.sh, jtool.sh e riferimenti nel README.
 Senza opzioni chiede i nuovi valori.
 
   --repo URL      nuovo repository (GitHub, GitLab, Gitea/Forgejo), solo https
@@ -256,10 +256,10 @@ cs_report() {
     raw=$(cs_raw_base "$CS_REPO" "$CS_REF" "$CS_REF_TYPE" "$CS_PROVIDER")
     command="curl -fsSL $raw/bootstrap.sh -o /tmp/jacktools-bootstrap.sh && sudo bash /tmp/jacktools-bootstrap.sh --repo $CS_REPO"
     (( CS_FORCED )) && command+=" --provider $CS_PROVIDER"
-    printf '\nComando di avvio:\n  %s\n' "$command"
+    printf '\nComando di avvio:\n  curl -fsSL %s/jtool.sh | sudo bash\nComando completo:\n  %s\n' "$raw" "$command"
     if (( CS_CHECK )); then
         local path
-        for path in bootstrap.sh MANIFEST; do
+        for path in jtool.sh bootstrap.sh MANIFEST; do
             if curl -fsSL --proto '=https' --max-time 20 -o /dev/null "$raw/$path"; then cs_say "raggiungibile: $raw/$path"
             else cs_say "NON raggiungibile: $raw/$path (file pubblicati? repository privato?)"; fi
         done

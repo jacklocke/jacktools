@@ -9,7 +9,7 @@ if ! command -v shellcheck >/dev/null 2>&1; then
     exit 0
 fi
 cd "$ROOT"
-for script in bootstrap.sh jacktools.sh lib/*/*.sh tests/*.sh tools/*.sh; do
+for script in bootstrap.sh jtool.sh jacktools.sh lib/*/*.sh tests/*.sh tools/*.sh; do
     if out=$(shellcheck -f gcc "$script" 2>&1); then pass "shellcheck: $script"; else printf '%s\n' "$out" >&2; fail "shellcheck: $script"; fi
 done
 finish_tests

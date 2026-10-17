@@ -6,17 +6,25 @@ Prima di cambiare qualcosa mostra il riepilogo e chiede conferma. Fa sempre un b
 ## Avvio
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/jacklocke/jacktools/refs/heads/main/jtool.sh | sudo bash
+```
+
+Con opzioni: `… | sudo bash -s -- --tag v2.0.0 -- all --dry-run`.
+
+`jtool.sh` scarica `bootstrap.sh` e lo avvia, lasciando il terminale al menu. Comando completo equivalente, se preferisci leggere `bootstrap.sh` prima di eseguirlo:
+
+```bash
 curl -fsSL https://raw.githubusercontent.com/jacklocke/jacktools/refs/heads/main/bootstrap.sh \
   -o /tmp/jacktools-bootstrap.sh \
   && sudo bash /tmp/jacktools-bootstrap.sh --repo https://github.com/jacklocke/jacktools
 ```
 
-> **Usarlo dal proprio repository.** Nel comando cambiano due cose: l'URL raw di `bootstrap.sh` e `--repo`.
+> **Usarlo dal proprio repository.** `jtool.sh` usa solo il repository scritto al suo interno: per un altro repository serve il comando completo, dove cambiano due cose: l'URL raw di `bootstrap.sh` e `--repo`.
 > - GitHub: `https://raw.githubusercontent.com/<utente>/<progetto>/refs/heads/main/bootstrap.sh` e `--repo https://github.com/<utente>/<progetto>`
 > - Gitea/Forgejo: `https://<server>/<utente>/<progetto>/raw/branch/main/bootstrap.sh` e `--repo https://<server>/<utente>/<progetto>`
 > - GitLab: `https://<server>/<gruppo>/<progetto>/-/raw/main/bootstrap.sh` e `--repo https://<server>/<gruppo>/<progetto>`
 >
-> **Per pubblicarlo altrove** (fork, Gitea, GitLab): `bash tools/cambia-server-git.sh` chiede il nuovo repository e aggiorna da solo `bootstrap.sh` (`DEFAULT_REPO`) e questo README, con anteprima, conferma per ogni file e backup. Con `--dry-run` mostra solo le modifiche, con `--check` verifica che il nuovo server risponda.
+> **Per pubblicarlo altrove** (fork, Gitea, GitLab): `bash tools/cambia-server-git.sh` chiede il nuovo repository e aggiorna da solo `bootstrap.sh` (`DEFAULT_REPO`), `jtool.sh` e questo README, con anteprima, conferma per ogni file e backup. Con `--dry-run` mostra solo le modifiche, con `--check` verifica che il nuovo server risponda.
 > Altre opzioni:
 > - `--tag v2.0.0`: usa una versione precisa invece di `main`;
 > - `--token-file /root/token`: repository privato (file di root con permessi 0600);
@@ -145,4 +153,3 @@ Ogni file nuovo va aggiunto anche a `MANIFEST`.
 - Log: `/var/log/jacktools.log`
 - Backup: `/var/backups/jacktools/`
 - Copia temporanea: `/tmp/jacktools`
-
