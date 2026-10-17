@@ -30,10 +30,27 @@ BS_CACERT="${JACKTOOLS_CACERT:-}"
 BS_ALLOW_HTTP=0
 BS_LOCAL=""
 BS_HEADER_FILE=""
+BS_PROGRESS=0   # 1 = the download progress line is open on the terminal
 declare -a BS_FORWARD=()
 
-bs_die() { printf 'ERRORE: %s\n' "$*" >&2; exit 1; }
-bs_warn() { printf 'AVVISO: %s\n' "$*" >&2; }
+bs_die() { bs_progress_break; printf 'ERRORE: %s\n' "$*" >&2; exit 1; }
+bs_warn() { bs_progress_break; printf 'AVVISO: %s\n' "$*" >&2; }
+
+# Download progress: one line rewritten in place, only when stdout is a terminal.
+# bs_progress DONE TOTAL FILE
+bs_progress() {
+    [[ -t 1 ]] || return 0
+    local width=20 filled bar rest
+    filled=$(( $1 * width / $2 ))
+    printf -v bar '%*s' "$filled" ''
+    printf -v rest '%*s' "$(( width - filled ))" ''
+    printf '\rDownload [%s%s] %d/%d  %.40s\033[K' "${bar// /#}" "${rest// /-}" "$1" "$2" "$3"
+    BS_PROGRESS=1
+}
+# Clears the progress line (end of the download).
+bs_progress_end() { if (( BS_PROGRESS )); then printf '\r\033[K'; BS_PROGRESS=0; fi; }
+# Leaves the progress line visible and moves to a new line (before an error or warning).
+bs_progress_break() { if (( BS_PROGRESS )); then printf '\n'; BS_PROGRESS=0; fi; }
 
 bs_usage() {
     cat <<'EOF'
@@ -215,21 +232,25 @@ bs_prepare_target() {
 }
 
 bs_download() {
-    local rel destination
+    local rel destination count
     local -a files
     bs_prepare_target
     printf 'Sorgente: %s\n' "$JACKTOOLS_SOURCE"
     bs_fetch "$BS_BASE_URL/MANIFEST" "$TARGET_DIR/MANIFEST" || bs_die "download fallito: $BS_BASE_URL/MANIFEST"
     mapfile -t files < <(grep -vE '^[[:space:]]*(#|$)' "$TARGET_DIR/MANIFEST")
     (( ${#files[@]} > 0 )) || bs_die "MANIFEST vuoto."
+    count=0
     for rel in "${files[@]}"; do
+        bs_progress "$count" "${#files[@]}" "$rel"
         bs_safe_path "$rel" || bs_die "percorso non sicuro nel MANIFEST: $rel"
         destination="$TARGET_DIR/$rel"
         mkdir -p -- "$(dirname -- "$destination")"
         bs_fetch "$BS_BASE_URL/$rel" "$destination.download" || bs_die "download fallito: $BS_BASE_URL/$rel"
         bs_check_file "$rel" "$destination.download"
         mv -f -- "$destination.download" "$destination"
+        (( ++count ))
     done
+    bs_progress_end
     chmod -R go-rwx "$TARGET_DIR"
     printf 'Scaricati e verificati %s file.\n' "${#files[@]}"
 }

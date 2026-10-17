@@ -71,6 +71,12 @@ assert_false 'token never in curl arguments' grep -q abcd1234TOKEN "$WORK/curl.l
 assert_true 'token sent through a header file' grep -q -- '-H @' "$WORK/curl.log"
 assert_true 'https only' grep -q -- "--proto =https" "$WORK/curl.log"
 assert_false 'token never in output' grep -q abcd1234TOKEN <<<"$out"
+assert_false 'no progress bar without a terminal' grep -q 'Download \[' <<<"$out"
+# With a terminal (script gives a pty): one line rewritten in place, cleared at the end.
+tty_out=$(script -qec "bash '$ROOT/bootstrap.sh' --base-url https://files.example/jt -- version" /dev/null 2>&1 </dev/null)
+assert_contains 'progress bar on a terminal' 'Download [--------------------] 0/' "$tty_out"
+assert_contains 'progress shows the file' '1/' "$tty_out"
+assert_contains 'progress line cleared before the summary' $'\r\e[KScaricati e verificati' "$tty_out"
 assert_false 'header file removed' bash -c "ls /tmp/tmp.* 2>/dev/null | xargs -r grep -l abcd1234TOKEN 2>/dev/null | grep -q ."
 
 # A tampered server: path traversal in MANIFEST, broken script, missing file.
@@ -84,6 +90,8 @@ assert_contains 'syntax error refused' 'errore di sintassi' "$(bash "$ROOT/boots
 cp "$ROOT/lib/core/ui.sh" "$WORK/server/lib/core/ui.sh"
 rm "$WORK/server/lib/core/env.sh"
 assert_contains 'missing file reported with its URL' 'download fallito: https://files.example/jt/lib/core/env.sh' "$(bash "$ROOT/bootstrap.sh" --base-url https://files.example/jt -- version 2>&1 || true)"
+tty_out=$(script -qec "bash '$ROOT/bootstrap.sh' --base-url https://files.example/jt -- version" /dev/null 2>&1 </dev/null || true)
+assert_contains 'error on its own line after the progress bar' $'lib/core/env.sh\e[K\r\nERRORE: download fallito' "$tty_out"
 rm -rf "$WORK/target"; ln -s "$WORK/server" "$WORK/target"
 assert_contains 'symlinked target refused' 'link simbolico' "$(bash "$ROOT/bootstrap.sh" --base-url https://files.example/jt -- version 2>&1 || true)"
 rm "$WORK/target"
