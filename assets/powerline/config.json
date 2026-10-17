@@ -1,0 +1,17 @@
+{
+	"common": {
+		"paths": [
+			"~/.config/powerline/segments"
+		]
+	},
+	"ext": {
+		"shell": {
+			"colorscheme": "gruvbox",
+			"theme": "twoline"
+		},
+		"tmux": {
+			"colorscheme": "gruvbox",
+			"theme": "custom"
+		}
+	}
+}

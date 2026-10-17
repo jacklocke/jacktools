@@ -1,0 +1,2 @@
+# Always LF: a script with CRLF line endings fails in bash (e.g. jtool.sh via curl | bash).
+* text=auto eol=lf

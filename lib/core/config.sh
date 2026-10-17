@@ -40,6 +40,7 @@ declare -gA CONFIG_VALIDATOR=(
     [CUSTOM_SUDO]="enum:password|nopasswd"
     [BANNER]="valid_banner_name"
     [BANNER_TEXT]="valid_banner_text"
+    [PL_THEME]="valid_pl_theme"
     [SSH_PASSWORD_AUTH]="enum:no|keep"
     [SSH_ROOT_LOGIN]="enum:no|prohibit-password|keep"
     [SSH_PORT]="valid_port"
@@ -67,7 +68,7 @@ CONFIG_KEY_ORDER=(
     HOSTNAME LOCALE TIMEZONE NTP NET_IFACE NET_MODE NET_CIDR NET_GATEWAY NET_DNS NET_SEARCH
     SWAP_SIZE JOURNAL_MAX LOGROTATE_COMPRESS MOTD_CLEAN UPGRADE PACKAGES DOCKER_COMPOSE
     DOCKER_REMOVE_CONFLICTS UNATTENDED_REBOOT ADMIN_USER ADMIN_FULLNAME ADMIN_KEY ADMIN_SUDO
-    CUSTOM_USERS BANNER BANNER_TEXT SSH_PASSWORD_AUTH SSH_ROOT_LOGIN SSH_PORT UFW_ALLOW
+    CUSTOM_USERS BANNER BANNER_TEXT PL_THEME SSH_PASSWORD_AUTH SSH_ROOT_LOGIN SSH_PORT UFW_ALLOW
     F2B_MAXRETRY F2B_FINDTIME F2B_BANTIME F2B_IGNOREIP REMOVE_HOME REMOVE_MAIL
 )
 
@@ -95,7 +96,7 @@ config_validate() {
             for item in $value; do "${rule#list:}" "$item" || return 1; done
             return 0
             ;;
-        *) [[ -z "$value" && "$key" =~ ^(ADMIN_FULLNAME|ADMIN_KEY|BANNER_TEXT|NET_.*|F2B_IGNOREIP)$ ]] || "$rule" "$value" ;;
+        *) [[ -z "$value" && "$key" =~ ^(ADMIN_FULLNAME|ADMIN_KEY|BANNER_TEXT|PL_THEME|NET_.*|F2B_IGNOREIP)$ ]] || "$rule" "$value" ;;
     esac
 }
 
@@ -150,10 +151,11 @@ config_check_step() {
                 [[ " ${CFG["CUSTOM_EXTRAS:$user"]:-} " != *" sudo "* || -n "${CFG["CUSTOM_SUDO:$user"]:-}" ]] || { ui_error config.missing_key "CUSTOM_SUDO:$user" "$(step_label "$id")"; return 1; }
             done
             [[ "${CFG[BANNER]}" != custom || -n "${CFG[BANNER_TEXT]:-}" ]] || { ui_error config.missing_key BANNER_TEXT "$(step_label "$id")"; return 1; }
+            ! custom_any_module powerline-theme || [[ -n "${CFG[PL_THEME]:-}" ]] || { ui_error config.missing_key PL_THEME "$(step_label "$id")"; return 1; }
             ;;
     esac
     # Optional values default to empty.
-    for key in ADMIN_FULLNAME ADMIN_KEY ADMIN_PASSWORD NET_CIDR NET_GATEWAY NET_DNS NET_SEARCH F2B_IGNOREIP BANNER_TEXT; do
+    for key in ADMIN_FULLNAME ADMIN_KEY ADMIN_PASSWORD NET_CIDR NET_GATEWAY NET_DNS NET_SEARCH F2B_IGNOREIP BANNER_TEXT PL_THEME; do
         [[ -v "CFG[$key]" ]] || CFG["$key"]=''
     done
     if declare -F "${id}_config_prepare" >/dev/null; then "${id}_config_prepare" || return 1; fi

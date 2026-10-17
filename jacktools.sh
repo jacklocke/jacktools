@@ -10,7 +10,7 @@ JACKTOOLS_LIBRARIES=(
     core/log core/msg core/ui core/exec core/fs core/validate core/state core/env core/steps core/cleanup core/config
     system/hostname system/locale system/time system/network system/swap system/journald system/motd
     install/apt install/docker install/unattended
-    users/account users/admin users/customize users/remove_ubuntu
+    users/account users/admin users/powerline_theme users/customize users/remove_ubuntu
     security/ssh security/ufw security/fail2ban
     maint/status maint/fail2ban maint/users maint/firewall maint/ssh maint/docker maint/export maint/menu
 )

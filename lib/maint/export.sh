@@ -126,6 +126,10 @@ export_customize() {
         if [[ -n "$line" ]] && valid_banner_name "$line"; then CFG[BANNER]="$line"; fi
         line=$(sed -n "s/^# jacktools-banner-text: \(.*\)$/\1/p" "$bashrc" | head -1)
         if [[ -n "$line" ]] && valid_banner_text "$line"; then CFG[BANNER]=custom; CFG[BANNER_TEXT]="$line"; fi
+        if [[ " $modules " == *" powerline-theme "* && -z "${CFG[PL_THEME]:-}" ]]; then
+            line=$(pl_installed_theme "$user")
+            if [[ -n "$line" ]] && valid_pl_theme "$line"; then CFG[PL_THEME]="$line"; else CFG[PL_THEME]="$PL_THEME_DEFAULT"; fi
+        fi
     done < <(users_discover)
     [[ -n "$users" ]] || return 1
     CFG[CUSTOM_USERS]=$(xargs <<<"$users")

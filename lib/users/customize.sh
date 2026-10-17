@@ -6,8 +6,11 @@ set -Eeuo pipefail
 CUSTOM_BEGIN="# >>> JACKTOOLS CUSTOMIZATION >>>"
 CUSTOM_END="# <<< JACKTOOLS CUSTOMIZATION <<<"
 CUSTOM_EXTRAS=(tmux docker_group ssh_key sudo)
-# Files a module needs in the user's home: module id -> "asset in assets/|path under home".
+# Files a module needs in the user's home: module id -> space-separated "asset in assets/|path
+# under home" entries. Mode 0755 when the asset starts with "#!", 0644 otherwise.
+CUSTOM_PL_CONF=".config/powerline"
 declare -gA CUSTOM_MODULE_FILES=(
+    [powerline-theme]="powerline/config.json|$CUSTOM_PL_CONF/config.json powerline/themes/tmux/custom.json|$CUSTOM_PL_CONF/themes/tmux/custom.json powerline/themes/shell/twoline.json|$CUSTOM_PL_CONF/themes/shell/twoline.json powerline/segments/sysseg.py|$CUSTOM_PL_CONF/segments/sysseg.py powerline/tools/gen-colorschemes.py|$CUSTOM_PL_CONF/tools/gen-colorschemes.py powerline/tools/tmux-hostname.py|$CUSTOM_PL_CONF/tools/tmux-hostname.py plcolors.sh|.local/bin/plcolors"
     [tmux-login-menu]="tmux-login-menu.sh|.local/bin/tmux-login-menu.sh"
     [drin]="drin.sh|.local/bin/drin"
 )
@@ -15,6 +18,7 @@ declare -gA CUSTOM_MODULE_FILES=(
 # among the packages of this run.
 declare -gA CUSTOM_MODULE_NEEDS=(
     [powerline]="powerline"
+    [powerline-theme]="powerline python3"
     [tmux-login-menu]="tmux"
     [drin]="figlet at"
 )
@@ -258,7 +262,17 @@ customize_collect() {
     for user in "${chosen[@]}"; do
         if [[ " ${CFG["CUSTOM_MODULES:$user"]} " == *" banner "* ]]; then banner_choose || return 1; break; fi
     done
+    if custom_any_module powerline-theme; then pl_choose || return 1; fi
     return 0
+}
+
+# Does any selected user have module ID?
+custom_any_module() {
+    local user
+    for user in ${CFG[CUSTOM_USERS]:-}; do
+        [[ " ${CFG["CUSTOM_MODULES:$user"]:-} " == *" $1 "* ]] && return 0
+    done
+    return 1
 }
 
 # ---- Rendering
@@ -269,6 +283,12 @@ custom_render_block() {
     printf '# Gestito da JackTools: le modifiche dentro questo blocco vengono sovrascritte.\n'
     # ":" keeps the block valid when no module is selected.
     printf 'if [[ $- == *i* ]]; then\n:\n'
+    if custom_has_local_bin "$user"; then
+        # Once for every module that installs a command in ~/.local/bin (Ubuntu adds it at
+        # login only if it already existed). Not a "# --- id" line: the export skips it.
+        # shellcheck disable=SC2016 # Written literally into .bashrc, expanded at login.
+        printf '\n# jacktools-path\ncase ":$PATH:" in\n    *":$HOME/.local/bin:"*) ;;\n    *) PATH="$HOME/.local/bin:$PATH" ;;\nesac\n'
+    fi
     for i in "${!CUSTOM_MOD_IDS[@]}"; do
         [[ " ${CFG["CUSTOM_MODULES:$user"]} " == *" ${CUSTOM_MOD_IDS[$i]} "* ]] || continue
         printf '\n# --- %s\n' "${CUSTOM_MOD_IDS[$i]}"
@@ -309,14 +329,64 @@ custom_bashrc_ok() {
 
 # Module files needed by USER's selection, as "asset|path under home" lines.
 custom_module_files() {
-    local id
+    local id entry
     for id in ${CFG["CUSTOM_MODULES:$1"]:-}; do
-        [[ -v "CUSTOM_MODULE_FILES[$id]" ]] && printf '%s\n' "${CUSTOM_MODULE_FILES[$id]}"
+        [[ -v "CUSTOM_MODULE_FILES[$id]" ]] || continue
+        for entry in ${CUSTOM_MODULE_FILES[$id]}; do printf '%s\n' "$entry"; done
     done
     return 0
 }
 
-custom_module_file_ok() { cmp -s "$JACKTOOLS_DIR/assets/${2%%|*}" "$(user_home "$1")/${2#*|}" 2>/dev/null; }
+# Does USER's selection install a command in ~/.local/bin?
+custom_has_local_bin() {
+    local entry
+    while IFS= read -r entry; do [[ "${entry#*|}" == .local/bin/* ]] && return 0; done < <(custom_module_files "$1")
+    return 1
+}
+
+# custom_module_source RESULT_VAR ENTRY: the content to install, usually the asset itself;
+# the powerline config.json is rendered with the chosen theme.
+custom_module_source() {
+    local -n custom_module_source_result="$1"
+    local custom_module_source_tmp
+    if [[ "${2%%|*}" == "$PL_CONFIG_ASSET" ]]; then
+        fs_mktemp custom_module_source_tmp
+        pl_render_config "${CFG[PL_THEME]:-$PL_THEME_DEFAULT}" >"$custom_module_source_tmp"
+        custom_module_source_result="$custom_module_source_tmp"
+    else
+        custom_module_source_result="$JACKTOOLS_DIR/assets/${2%%|*}"
+    fi
+}
+
+custom_module_file_ok() {
+    local source
+    custom_module_source source "$2"
+    cmp -s "$source" "$(user_home "$1")/${2#*|}" 2>/dev/null
+}
+
+# Are USER's powerline theme files (installed and generated) all up to date?
+custom_pl_ok() {
+    local entry
+    for entry in ${CUSTOM_MODULE_FILES[powerline-theme]}; do custom_module_file_ok "$1" "$entry" || return 1; done
+    pl_generated_ok "$1"
+}
+
+# Scripts are executable, data files are not.
+custom_module_file_mode() { if [[ "$(head -c 2 -- "$1")" == '#!' ]]; then printf 0755; else printf 0644; fi; }
+
+# custom_make_dirs USER REL: create the missing directories of REL (a path under the home),
+# owned by the user.
+custom_make_dirs() {
+    local user="$1" rel="$2" dir part group
+    local -a parts
+    dir=$(user_home "$user"); group=$(user_primary_group "$user")
+    [[ "$rel" == */* ]] || return 0
+    IFS=/ read -r -a parts <<<"${rel%/*}"
+    for part in "${parts[@]}"; do
+        dir="$dir/$part"
+        if [[ ! -d "$dir" ]]; then mkdir -- "$dir" && chmod 0755 "$dir" && fs_chown "$user:$group" "$dir" || return 1; fi
+    done
+}
 
 custom_tmux_ok() { cmp -s "$JACKTOOLS_DIR/assets/tmux.conf" "$(user_home "$1")/.tmux.conf" 2>/dev/null; }
 
@@ -346,6 +416,10 @@ customize_plan() {
             if ! user_exists "$user" || ! custom_module_file_ok "$user" "$entry"; then msg customize.plan_module_file "${entry#*|}"; fi
         done < <(custom_module_files "$user")
         custom_plan_missing_commands "$user"
+        if [[ " ${CFG["CUSTOM_MODULES:$user"]} " == *" powerline-theme "* ]]; then
+            [[ " ${CFG["CUSTOM_MODULES:$user"]} " == *" powerline "* ]] || msg customize.plan_pl_needs_module
+            if ! user_exists "$user" || ! pl_generated_ok "$user"; then msg customize.plan_pl_schemes; fi
+        fi
         [[ "$extras" == *" docker_group "* ]] && msg customize.plan_docker_group
         [[ "$extras" == *" ssh_key "* ]] && msg customize.plan_key
         [[ "$extras" == *" sudo "* ]] && msg "customize.plan_sudo_${CFG["CUSTOM_SUDO:$user"]}"
@@ -356,6 +430,7 @@ customize_plan() {
         "$BANNER_CUSTOM") msg customize.plan_banner_custom "${CFG[BANNER_TEXT]}" ;;
         *) msg customize.plan_banner "${CFG[BANNER]}" ;;
     esac
+    if custom_any_module powerline-theme; then msg customize.plan_pl_theme "${CFG[PL_THEME]:-$PL_THEME_DEFAULT}"; fi
     return 0
 }
 
@@ -388,29 +463,24 @@ custom_apply_tmux() {
 # Install the files of the selected modules (e.g. ~/.local/bin/tmux-login-menu.sh, 0755),
 # creating missing directories owned by the user.
 custom_apply_module_files() {
-    local user="$1" entry home group dest dir rel part
-    local -a parts
+    local user="$1" entry home group dest rel source
     home=$(user_home "$user"); group=$(user_primary_group "$user")
     while IFS= read -r entry; do
         [[ -n "$entry" ]] || continue
         custom_module_file_ok "$user" "$entry" && continue
         rel=${entry#*|}
         dest="$home/$rel"
-        dir="$home"
-        IFS=/ read -r -a parts <<<"${rel%/*}"
-        for part in "${parts[@]}"; do
-            dir="$dir/$part"
-            if [[ ! -d "$dir" ]]; then mkdir -- "$dir" && chmod 0755 "$dir" && fs_chown "$user:$group" "$dir" || return 1; fi
-        done
+        custom_make_dirs "$user" "$rel" || return 1
+        custom_module_source source "$entry"
         backup_file "$dest" "module-$user-${rel##*/}" >/dev/null || return 1
-        atomic_install "$JACKTOOLS_DIR/assets/${entry%%|*}" "$dest" 0755 "$user" "$group" || return 1
+        atomic_install "$source" "$dest" "$(custom_module_file_mode "$source")" "$user" "$group" || return 1
         log_write INFO "module file installed: $dest"
     done < <(custom_module_files "$user")
     return 0
 }
 
 customize_apply() {
-    local user extras failed=0
+    local user extras theme failed=0
     custom_load_modules || return 1
     if [[ "${CFG[BANNER]:-none}" == "$BANNER_CUSTOM" ]]; then banner_ensure_figlet || return 1; fi
     for user in ${CFG[CUSTOM_USERS]}; do
@@ -419,7 +489,15 @@ customize_apply() {
         fi
         extras=" ${CFG["CUSTOM_EXTRAS:$user"]} "
         custom_apply_bashrc "$user" || failed=1
+        theme=0
+        if [[ " ${CFG["CUSTOM_MODULES:$user"]} " == *" powerline-theme "* ]]; then
+            # The daemon is restarted only when the theme files actually change.
+            custom_pl_ok "$user" || theme=1
+        fi
         custom_apply_module_files "$user" || failed=1
+        if (( theme )); then
+            if pl_apply_generated "$user"; then pl_reload_daemon "$user"; else failed=1; fi
+        fi
         if [[ "$extras" == *" tmux "* ]]; then custom_apply_tmux "$user" || failed=1; fi
         if [[ "$extras" == *" docker_group "* ]]; then
             if group_exists docker; then account_add_group "$user" docker || failed=1; else ui_warn customize.no_docker_group; fi
@@ -451,6 +529,7 @@ customize_verify() {
             [[ -z "$entry" ]] || custom_module_file_ok "$user" "$entry" || return 1
         done < <(custom_module_files "$user")
         [[ " ${CFG["CUSTOM_EXTRAS:$user"]} " != *" tmux "* ]] || custom_tmux_ok "$user" || return 1
+        [[ " ${CFG["CUSTOM_MODULES:$user"]} " != *" powerline-theme "* ]] || pl_generated_ok "$user" || return 1
     done
 }
 

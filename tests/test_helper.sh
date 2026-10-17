@@ -82,7 +82,7 @@ load_install() {
 load_users() {
     load_system
     local library
-    for library in install/apt security/ssh users/account users/admin users/customize users/remove_ubuntu; do
+    for library in install/apt security/ssh users/account users/admin users/powerline_theme users/customize users/remove_ubuntu; do
         # shellcheck source=/dev/null
         source "$ROOT/lib/$library.sh"
     done

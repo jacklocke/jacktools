@@ -18,16 +18,16 @@ CFG[BANNER]=welcome CFG["CUSTOM_MODULES:x"]='locale banner tmux-aliases'
 assert_contains 'block renders with errexit on' 'alias tnew=' "$(set -e; custom_render_block x)"
 assert_eq 'module header lines stripped' 0 "$(custom_render_block x | grep -c 'jt-module:')"
 assert_contains 'module files in order' 'locale' "$(custom_render_block x | grep '^# --- ' | head -1)"
-assert_eq 'modules in order' 'locale banner sysinfo powerline history tmux-aliases docker-aliases useful-aliases fun drin tmux-login-menu' "${CUSTOM_MOD_IDS[*]}"
-assert_eq 'module defaults (history, drin and tmux login menu off)' '1 1 1 1 0 1 0 0 0 0 0' "${CUSTOM_MOD_DEFAULT[*]}"
+assert_eq 'modules in order' 'locale banner sysinfo powerline powerline-theme history tmux-aliases docker-aliases useful-aliases fun drin tmux-login-menu' "${CUSTOM_MOD_IDS[*]}"
+assert_eq 'module defaults (powerline theme, history, drin and tmux login menu off)' '1 1 1 1 0 0 1 0 0 0 0 0' "${CUSTOM_MOD_DEFAULT[*]}"
 assert_eq 'banners from files' 'C3 TARS UMB welcome zima zimalxc' "$(banners_list | LC_ALL=C sort | xargs)"
 assert_eq 'banner suggested by hostname (case-insensitive)' TARS "$(banner_suggested)"
 printf 'other\n' >"$JACKTOOLS_ROOT/etc/hostname"
 assert_eq 'welcome when no banner matches' welcome "$(banner_suggested)"
 printf 'tars\n' >"$JACKTOOLS_ROOT/etc/hostname"
 
-# Users: jack (operator) preselected; modules default + useful-aliases (8); banner default.
-customize_collect >"$WORK/out" 2>&1 <<<$'\n8\n\n'
+# Users: jack (operator) preselected; modules default + useful-aliases (9); banner default.
+customize_collect >"$WORK/out" 2>&1 <<<$'\n9\n\n'
 assert_contains 'users listed with uid and shell' 'jack (uid 1000, /bin/bash)' "$(cat "$WORK/out")"
 assert_contains 'root offered' 'root (amministratore di sistema)' "$(cat "$WORK/out")"
 assert_eq 'operator selected' jack "${CFG[CUSTOM_USERS]}"
@@ -79,7 +79,7 @@ printf 'docker:x:999:\n' >>"$WORK/group"
 customize_collect >"$WORK/out" 2>&1 <<EOF2
 1 2
 
-1 2 3 4 6 12 13 14 15
+1 2 3 4 7 13 14 15 16
 
 y
 $key
@@ -141,6 +141,56 @@ assert_false 'no warning when at is being installed' grep -q 'richiede at' <<<"$
 unset -f command_exists
 source "$ROOT/lib/core/exec.sh"
 CFG[PACKAGES]=''
+
+# ---- powerline-theme module: ~/.config/powerline with the chosen theme, schemes, plcolors
+assert_eq 'sixteen themes, read from the generator' 16 "$(pl_themes | wc -l)"
+assert_true 'theme valid' valid_pl_theme nord
+for bad in '' Nord 'nord;rm' ../x dracula2; do assert_false "theme rejected: $(printf %q "$bad")" valid_pl_theme "$bad"; done
+CFG=([CUSTOM_USERS]=jack [CUSTOM_MODULES:jack]='powerline-theme' [CUSTOM_EXTRAS:jack]='' [BANNER]=none)
+pl_choose >"$WORK/out" 2>&1 <<<$'\n'
+assert_eq 'default theme gruvbox' gruvbox "${CFG[PL_THEME]}"
+pl_choose >"$WORK/out" 2>&1 <<<$'2\n'
+assert_eq 'theme picked from the list' nord "${CFG[PL_THEME]}"
+plan=$(customize_plan)
+assert_contains 'plan names the theme' 'tema powerline: nord' "$plan"
+assert_contains 'plan warns without the powerline module' 'solo insieme al modulo powerline' "$plan"
+assert_contains 'plan announces the schemes' 'schemi di colori powerline' "$plan"
+pl_daemon_running() { true; }
+reset_commands
+customize_apply
+pl="$home/.config/powerline"
+assert_contains 'config.json with the chosen theme' '"colorscheme": "nord"' "$(cat "$pl/config.json")"
+assert_false 'no other theme left in config.json' grep -q gruvbox "$pl/config.json"
+assert_true 'tmux theme installed' cmp -s "$ROOT/assets/powerline/themes/tmux/custom.json" "$pl/themes/tmux/custom.json"
+assert_eq 'data files 0644' 644 "$(stat -c %a "$pl/segments/sysseg.py")"
+assert_eq 'tools 0755' 755 "$(stat -c %a "$pl/tools/tmux-hostname.py")"
+assert_true 'plcolors installed' cmp -s "$ROOT/assets/plcolors.sh" "$home/.local/bin/plcolors"
+assert_eq 'plcolors executable' 755 "$(stat -c %a "$home/.local/bin/plcolors")"
+assert_eq 'config dir owned by the user' jack "$(stat -c %U "$home/.config")"
+if command -v python3 >/dev/null; then
+    assert_true 'colour schemes generated' test -f "$pl/colorschemes/tmux/nord.json"
+    assert_eq 'one scheme per theme and part' 48 "$(find "$pl/colorschemes" -type f | wc -l)"
+    assert_true 'colors.json generated' test -f "$pl/colors.json"
+fi
+assert_contains 'running daemon restarted as the user' 'runuser -u jack' "$(commands_run)"
+assert_true 'verify with the theme' customize_verify
+reset_commands
+customize_apply
+assert_eq 'second apply changes nothing' '' "$(commands_run)"
+assert_contains 'plan: bashrc already up to date' 'già aggiornato' "$(customize_plan)"
+assert_false 'plan: schemes already in place' grep -q 'schemi di colori' <<<"$(customize_plan)"
+printf '{}\n' >"$pl/colorschemes/tmux/nord.json"
+assert_false 'verify notices a changed scheme' customize_verify
+customize_apply
+assert_true 'scheme restored' customize_verify
+unset -f pl_daemon_running
+# The path line is written once even with two modules in ~/.local/bin.
+CFG["CUSTOM_MODULES:jack"]='powerline-theme drin'
+assert_eq 'one PATH line for drin and plcolors' 1 "$(custom_render_block jack | grep -c 'jacktools-path')"
+CFG["CUSTOM_MODULES:jack"]='locale'
+assert_eq 'no PATH line without commands in ~/.local/bin' 0 "$(custom_render_block jack | grep -c 'jacktools-path')"
+CFG=([CUSTOM_USERS]=jack [CUSTOM_MODULES:jack]='powerline powerline-theme' [CUSTOM_EXTRAS:jack]='' [BANNER]=none [PL_THEME]=nord)
+assert_false 'no warning with the powerline module' grep -q 'solo insieme' <<<"$(customize_plan)"
 
 # ---- powerline module: warning when the package is neither installed nor selected
 CFG[CUSTOM_USERS]=jack CFG["CUSTOM_MODULES:jack"]='powerline' CFG["CUSTOM_EXTRAS:jack"]='' CFG[BANNER]=none

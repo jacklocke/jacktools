@@ -27,6 +27,7 @@ assets/packages.txt
 lib/security/ssh.sh
 lib/users/account.sh
 lib/users/admin.sh
+lib/users/powerline_theme.sh
 lib/users/customize.sh
 lib/users/remove_ubuntu.sh
 assets/banners/C3.txt
@@ -39,6 +40,7 @@ assets/bashrc.d/10-locale.sh
 assets/bashrc.d/20-banner.sh
 assets/bashrc.d/30-sysinfo.sh
 assets/bashrc.d/40-powerline.sh
+assets/bashrc.d/42-powerline-theme.sh
 assets/bashrc.d/45-history.sh
 assets/bashrc.d/50-tmux-aliases.sh
 assets/bashrc.d/60-docker-aliases.sh
@@ -60,3 +62,10 @@ assets/tmux-login-menu.sh
 assets/bashrc.d/90-tmux-login-menu.sh
 assets/drin.sh
 assets/bashrc.d/85-drin.sh
+assets/plcolors.sh
+assets/powerline/config.json
+assets/powerline/themes/tmux/custom.json
+assets/powerline/themes/shell/twoline.json
+assets/powerline/segments/sysseg.py
+assets/powerline/tools/gen-colorschemes.py
+assets/powerline/tools/tmux-hostname.py

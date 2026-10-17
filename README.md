@@ -1,4 +1,4 @@
-# JackTools 2.2.1
+# JackTools 2.3
 
 Prepara e mantiene un **Ubuntu Server 22.04+** da un menu in Bash: sistema, programmi, utenti, sicurezza e manutenzione.
 Prima di cambiare qualcosa mostra il riepilogo e chiede conferma. Fa sempre un backup e, se qualcosa va storto, torna indietro.
@@ -69,6 +69,24 @@ Prompt e barra di tmux con powerline: pacchetto `powerline` (preselezionato tra 
 
 - **Font**: di solito non serve installare nulla, perché Windows Terminal recente usa già Cascadia Mono, che ha i simboli. Se vedi quadratini o `?`, installa un Nerd Font **sul computer da cui ti colleghi** (sul server non serve nulla): comandi qui sotto.
 - **Senza il pacchetto**: il prompt resta normale e tmux parte senza errori; il riepilogo avvisa se il modulo è scelto ma powerline non verrà installato.
+
+### Tema powerline
+
+Modulo *Tema powerline* in Utenti → Personalizzazioni (non selezionato di default; va insieme al modulo *powerline*).
+
+- **Cosa cambia**: prompt su due righe (utente, cartella, branch git, stato dell'ultimo comando, poi `❯`), barra di tmux con CPU, RAM, disco, data e ora, hostname colorato prima della sessione.
+- **Tema**: si sceglie dall'elenco (16, predefinito `gruvbox`); *Mostrameli tutti* fa l'anteprima se powerline è già installato.
+- **Dove finisce**: `~/.config/powerline` (configurazione e schemi di colori) e il comando `~/.local/bin/plcolors`.
+- **Cambiarlo dopo**: `plcolors` mostra la galleria, `plcolors nord` applica un tema, `plcolors --demo` (dentro tmux) li fa scorrere sulla barra.
+
+### Scorciatoie di tmux (`.tmux.conf`)
+
+- **Prefisso**: Ctrl+A. Split: Ctrl+A `_` (affiancati) e Ctrl+A `-` (uno sopra l'altro).
+- **Mouse**: clic su pane e finestre, rotella, bordi trascinabili; Shift + selezione per selezionare testo come nel terminale. Il testo copiato in tmux finisce negli appunti del PC.
+- **Senza prefisso**: Alt+frecce cambia pane; Alt+i/j/k/l o Alt+Shift+frecce ridimensiona.
+- **Popup**: Ctrl+A M htop, Ctrl+A D dockly (se Docker è installato).
+- **Barra** in alto, titolo su ogni pane, finestre e pane numerati da 1.
+- **Mac**: Alt è il tasto Option. iTerm2: Settings → Profiles → Keys → Left Option key = Esc+. Terminale: Profili → Tastiera → "Usa Opzione come tasto Meta".
 
 ### Installare un Nerd Font (lato client)
 

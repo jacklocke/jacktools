@@ -23,7 +23,7 @@ assert_eq 'per-user key' 'locale banner' "${CFG[CUSTOM_MODULES:jack]}"
 # shellcheck disable=SC2016 # Malicious input must stay literal.
 for bad in 'HOSTNAME=$(id)' 'HOSTNAME="`id`"' 'HOSTNAME=a;rm' 'HOSTNAME=bad.name' 'UNKNOWN=1' 'ADMIN_PASSWORD="secret"' \
            'PACKAGES="curl -oops"' 'STEPS="hostname nosuchstep"' 'SSH_PORT=99999' 'CUSTOM_SUDO:Bad=password' \
-           'NTP=maybe' 'hostname=srv' 'HOSTNAME = srv' 'BANNER=../../etc/passwd' 'UFW_ALLOW="22/tcp 1;2"'; do
+           'NTP=maybe' 'hostname=srv' 'HOSTNAME = srv' 'BANNER=../../etc/passwd' 'UFW_ALLOW="22/tcp 1;2"' 'PL_THEME=nosuch' 'PL_THEME="nord;id"'; do
     write_conf 'STEPS="hostname"' "$bad"
     assert_rc "refused: $bad" 1 quiet config_load "$conf"
 done
@@ -48,6 +48,10 @@ CFG[CUSTOM_MODULES:jack]='locale'
 assert_rc 'custom banner needs text' 1 quiet config_check_step customize
 CFG[BANNER_TEXT]='Hi'
 assert_rc 'customize complete' 0 quiet config_check_step customize
+CFG[CUSTOM_MODULES:jack]='powerline powerline-theme'
+assert_rc 'powerline theme needs PL_THEME' 1 quiet config_check_step customize
+CFG[PL_THEME]=nord
+assert_rc 'powerline theme complete' 0 quiet config_check_step customize
 CFG[CUSTOM_MODULES:jack]='nosuchmodule'
 assert_rc 'unknown module refused' 1 quiet config_check_step customize
 
@@ -91,7 +95,7 @@ add_user jack 1000 /bin/bash sudo
 key='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKlongEnoughPayloadForTesting jack@pc'
 account_install_key jack "$key"
 ENV_OPERATOR=jack
-CFG=([BANNER]=TARS [CUSTOM_USERS]=jack [CUSTOM_MODULES:jack]='locale banner tmux-aliases' [CUSTOM_EXTRAS:jack]='tmux')
+CFG=([BANNER]=TARS [CUSTOM_USERS]=jack [CUSTOM_MODULES:jack]='locale banner powerline-theme tmux-aliases' [CUSTOM_EXTRAS:jack]='tmux' [PL_THEME]=kanagawa)
 customize_apply >/dev/null 2>&1
 CFG=([UNATTENDED_REBOOT]=03:30)
 unattended_render_jacktools >"$JACKTOOLS_ROOT/etc/apt/apt.conf.d/52jacktools-unattended-upgrades"
@@ -107,7 +111,8 @@ export_collect
 assert_eq 'exported steps' 'admin customize docker fail2ban journald locale motd packages ssh swap time ufw unattended upgrade' "$(tr ' ' '\n' <<<"${CFG[STEPS]}" | sort | xargs)"
 assert_eq 'swap size rounded' 2G "${CFG[SWAP_SIZE]}"
 assert_eq 'admin key exported' "$key" "${CFG[ADMIN_KEY]}"
-assert_eq 'modules read from block' 'locale banner tmux-aliases' "${CFG[CUSTOM_MODULES:jack]}"
+assert_eq 'modules read from block' 'locale banner powerline-theme tmux-aliases' "${CFG[CUSTOM_MODULES:jack]}"
+assert_eq 'powerline theme read from config.json' kanagawa "${CFG[PL_THEME]}"
 assert_eq 'banner read from block' TARS "${CFG[BANNER]}"
 assert_eq 'ufw ssh first, v6 duplicates ignored' '2222/tcp 443/tcp' "${CFG[UFW_ALLOW]}"
 assert_eq 'docker compose not installed' no "${CFG[DOCKER_COMPOSE]}"
