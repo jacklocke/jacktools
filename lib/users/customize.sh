@@ -10,7 +10,7 @@ CUSTOM_EXTRAS=(tmux docker_group ssh_key sudo)
 # under home" entries. Mode 0755 when the asset starts with "#!", 0644 otherwise.
 CUSTOM_PL_CONF=".config/powerline"
 declare -gA CUSTOM_MODULE_FILES=(
-    [powerline-theme]="powerline/config.json|$CUSTOM_PL_CONF/config.json powerline/themes/tmux/custom.json|$CUSTOM_PL_CONF/themes/tmux/custom.json powerline/themes/shell/twoline.json|$CUSTOM_PL_CONF/themes/shell/twoline.json powerline/segments/sysseg.py|$CUSTOM_PL_CONF/segments/sysseg.py powerline/tools/gen-colorschemes.py|$CUSTOM_PL_CONF/tools/gen-colorschemes.py powerline/tools/tmux-hostname.py|$CUSTOM_PL_CONF/tools/tmux-hostname.py plcolors.sh|.local/bin/plcolors"
+    [powerline-theme]="powerline/config.json|$CUSTOM_PL_CONF/config.json powerline/themes/tmux/custom.json|$CUSTOM_PL_CONF/themes/tmux/custom.json powerline/themes/shell/twoline.json|$CUSTOM_PL_CONF/themes/shell/twoline.json powerline/segments/sysseg.py|$CUSTOM_PL_CONF/segments/sysseg.py powerline/tools/gen-colorschemes.py|$CUSTOM_PL_CONF/tools/gen-colorschemes.py powerline/tools/tmux-hostname.py|$CUSTOM_PL_CONF/tools/tmux-hostname.py powerline/tools/theme-menu.sh|$CUSTOM_PL_CONF/tools/theme-menu.sh powerline/tools/tmux-keys.txt|$CUSTOM_PL_CONF/tools/tmux-keys.txt plcolors.sh|.local/bin/plcolors"
     [tmux-login-menu]="tmux-login-menu.sh|.local/bin/tmux-login-menu.sh"
     [drin]="drin.sh|.local/bin/drin"
 )

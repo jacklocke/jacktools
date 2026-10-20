@@ -18,3 +18,4 @@ bat
 fzf
 fail2ban
 cmatrix
+python3-netifaces

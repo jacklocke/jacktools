@@ -1,0 +1,45 @@
+
+  [1mSCORCIATOIE TMUX[0m                     [2mq per chiudere · / per cercare[0m
+
+  Il prefisso è [1mCtrl+a[0m: premi Ctrl+a, rilascia, poi il tasto.
+
+  [1;36mPane[0m
+    Ctrl+a _            divide: nuovo pane a destra
+    Ctrl+a -            divide: nuovo pane sotto
+    Alt+frecce          cambia pane (anche con un clic)
+    Alt+Shift+frecce    ridimensiona (anche Alt+i/j/k/l, Ctrl+a i/j/k/l)
+    Ctrl+a z            ingrandisce o ripristina il pane     [2mbadge ZOOM[0m
+    exit / Ctrl+d       chiude il pane
+
+  [1;36mFinestre e sessioni[0m
+    Ctrl+a n            nuova finestra
+    Ctrl+a w            elenco di finestre e sessioni
+    Ctrl+a 1..9         vai alla finestra
+    Ctrl+a ,            rinomina la finestra
+    Ctrl+a d            stacca la sessione (resta attiva)
+
+  [1;36mPopup e menu[0m
+    Ctrl+a t            shell al volo nella cartella del pane
+    Ctrl+a M            htop
+    Ctrl+a D            dockly (container Docker)
+    Ctrl+a ?            questo riepilogo
+    Ctrl+a K            elenco completo dei tasti di tmux
+    Tasto destro barra  menu: finestre, split, popup, cambia tema
+    Tasto destro pane   menu di tmux: dividi, zoom, chiudi
+
+  [1;36mCopia e incolla[0m
+    trascina col mouse  copia negli appunti di tmux e del PC
+    Shift+trascina      selezione normale del terminale
+    Ctrl+a c            copia da tastiera: Ctrl+Spazio, frecce, Ctrl+c
+    Ctrl+a v            incolla l'ultima copia di tmux
+
+  [1;36mBarra[0m
+    badge ZOOM / SYNC   pane ingrandito / scrittura su tutti i pane
+    👥 N                N terminali collegati alla stessa sessione
+    finestra colorata   attività in una finestra in background
+    plcolors            galleria dei temi; plcolors <tema> lo applica
+
+  [1;36mMac[0m
+    Alt è Option. iTerm2: Settings > Profiles > Keys > Left Option key = Esc+
+    Terminale: Profili > Tastiera > Usa Opzione come tasto Meta
+

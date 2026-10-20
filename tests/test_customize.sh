@@ -45,6 +45,14 @@ assert_eq 'single block' 1 "$(grep -c '^# >>> JACKTOOLS CUSTOMIZATION >>>$' "$ho
 assert_contains 'banner embedded as echo lines' "echo '_/  |______ _______  ______'" "$bashrc"
 assert_false 'fun module not included' grep -q coffee "$home/.bashrc"
 assert_true '.tmux.conf installed' cmp -s "$ROOT/assets/tmux.conf" "$home/.tmux.conf"
+if command -v tmux >/dev/null; then
+    # tmux reads the shipped file without errors (private server, no user config). Errors are
+    # printed only by source-file on a running server, not by "-f" at start-up.
+    tmux_check() { HOME="$home" tmux -L "jt-test-$$" -f /dev/null start-server \; source-file "$1" \; kill-server 2>&1; }
+    assert_eq '.tmux.conf parsed by tmux' '' "$(tmux_check "$ROOT/assets/tmux.conf")"
+    printf 'bogus-command\n' >"$WORK/bad-tmux.conf"
+    assert_contains 'a broken tmux.conf is noticed' 'bogus-command' "$(tmux_check "$WORK/bad-tmux.conf")"
+fi
 assert_true 'bashrc backup' quiet compgen -G "$JACKTOOLS_BACKUP_ROOT/bashrc-jack-*"
 assert_true 'verify' customize_verify
 assert_contains 'plan reports bashrc up to date' 'già aggiornato' "$(customize_plan)"
@@ -164,6 +172,8 @@ assert_false 'no other theme left in config.json' grep -q gruvbox "$pl/config.js
 assert_true 'tmux theme installed' cmp -s "$ROOT/assets/powerline/themes/tmux/custom.json" "$pl/themes/tmux/custom.json"
 assert_eq 'data files 0644' 644 "$(stat -c %a "$pl/segments/sysseg.py")"
 assert_eq 'tools 0755' 755 "$(stat -c %a "$pl/tools/tmux-hostname.py")"
+assert_eq 'theme menu 0755' 755 "$(stat -c %a "$pl/tools/theme-menu.sh")"
+assert_eq 'key summary 0644' 644 "$(stat -c %a "$pl/tools/tmux-keys.txt")"
 assert_true 'plcolors installed' cmp -s "$ROOT/assets/plcolors.sh" "$home/.local/bin/plcolors"
 assert_eq 'plcolors executable' 755 "$(stat -c %a "$home/.local/bin/plcolors")"
 assert_eq 'config dir owned by the user' jack "$(stat -c %U "$home/.config")"

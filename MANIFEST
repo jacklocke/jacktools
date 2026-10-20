@@ -69,3 +69,5 @@ assets/powerline/themes/shell/twoline.json
 assets/powerline/segments/sysseg.py
 assets/powerline/tools/gen-colorschemes.py
 assets/powerline/tools/tmux-hostname.py
+assets/powerline/tools/theme-menu.sh
+assets/powerline/tools/tmux-keys.txt

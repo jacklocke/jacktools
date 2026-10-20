@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Mette l'hostname davanti alla sessione nella barra di tmux, con i colori del tema attivo.
-# Va lanciato da ~/.tmux.conf dopo il source di powerline.conf (che riscrive status-left).
+# Mette l'hostname davanti alla sessione nella barra di tmux e, a destra, i badge ZOOM
+# (pane ingrandito), SYNC (scrittura su tutti i pane) e client collegati, con i colori del tema.
+# Va lanciato da ~/.tmux.conf dopo il source di powerline.conf (che riscrive status-left/right).
 import json
 import os
 import subprocess
@@ -8,6 +9,13 @@ import subprocess
 BASE = os.path.join(os.environ.get('XDG_CONFIG_HOME') or os.path.expanduser('~/.config'), 'powerline')
 DIVIDER = ''
 MARK = ' #h '
+BADGE_MARK = '#{window_zoomed_flag}'
+# Ogni badge compare solo quando la sua condizione è vera.
+BADGES = (
+	('badge_zoom', '#{window_zoomed_flag}', ' ZOOM '),
+	('badge_sync', '#{pane_synchronized}', ' SYNC '),
+	('badge_clients', '#{>:#{session_attached},1}', ' 👥 #{session_attached} '),
+)
 
 
 def load(path):
@@ -17,6 +25,11 @@ def load(path):
 
 def tmux(*args):
 	return subprocess.run(('tmux',) + args, capture_output=True, text=True).stdout.rstrip('\n')
+
+
+def option(name):
+	# show -v scrive $ come \$: senza togliere l'escape, la riscrittura romperebbe #(env $POWERLINE_COMMAND ...)
+	return tmux('show', '-gv', name).replace('\\$', '$')
 
 
 def main():
@@ -34,7 +47,17 @@ def main():
 	sess_bg = cterm(session['session']['bg'])
 	prefix_bg = cterm(session['session:prefix']['bg'])
 
-	left = tmux('show', '-gv', 'status-left')
+	right = option('status-right')
+	if BADGE_MARK not in right:
+		badges = ''
+		for group, cond, text in BADGES:
+			style = common.get(group)
+			if style:
+				badges += '#{?%s,#[fg=colour%d#,bg=colour%d#,bold]%s#[default] ,}' % (
+					cond, cterm(style['fg']), cterm(style['bg']), text)
+		tmux('set', '-g', 'status-right', badges + right)
+
+	left = option('status-left')
 	if MARK in left:
 		return
 	host = (
