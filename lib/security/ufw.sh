@@ -78,4 +78,4 @@ ufw_apply() {
 
 ufw_verify() { ufw_compliant; }
 
-step_register ufw step.ufw security 1
+step_register ufw step.ufw security 0
