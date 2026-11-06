@@ -3,9 +3,25 @@
 # ports, then enable. Existing rules are never removed.
 set -Eeuo pipefail
 
-UFW_COMMON_RULES=(80/tcp 443/tcp)
-# msg-keys: ufw.rule.http ufw.rule.https
-UFW_COMMON_KEYS=(ufw.rule.http ufw.rule.https)
+# One checklist entry per service; an entry may open several ports (space separated).
+UFW_COMMON_RULES=(
+    80/tcp 443/tcp '8080/tcp 8443/tcp'
+    445/tcp 21/tcp
+    25/tcp '465/tcp 587/tcp' '143/tcp 993/tcp' '110/tcp 995/tcp'
+    3306/tcp 5432/tcp 6379/tcp 27017/tcp
+    '53/tcp 53/udp' 51820/udp 1194/udp
+)
+# msg-keys: ufw.rule.http ufw.rule.https ufw.rule.web_alt ufw.rule.smb ufw.rule.ftp
+# msg-keys: ufw.rule.smtp ufw.rule.submission ufw.rule.imap ufw.rule.pop3
+# msg-keys: ufw.rule.mysql ufw.rule.postgres ufw.rule.redis ufw.rule.mongodb
+# msg-keys: ufw.rule.dns ufw.rule.wireguard ufw.rule.openvpn
+UFW_COMMON_KEYS=(
+    ufw.rule.http ufw.rule.https ufw.rule.web_alt
+    ufw.rule.smb ufw.rule.ftp
+    ufw.rule.smtp ufw.rule.submission ufw.rule.imap ufw.rule.pop3
+    ufw.rule.mysql ufw.rule.postgres ufw.rule.redis ufw.rule.mongodb
+    ufw.rule.dns ufw.rule.wireguard ufw.rule.openvpn
+)
 
 valid_ufw_rule() {
     [[ "$1" =~ ^([1-9][0-9]{0,4})(/(tcp|udp))?$ ]] && (( BASH_REMATCH[1] <= 65535 ))
@@ -18,6 +34,11 @@ ufw_active() { ufw_status | grep -q '^Status: active'; }
 # ufw_has_rule RULE: an ALLOW rule for RULE (IPv4 line) is present.
 ufw_has_rule() { ufw_status | awk -v r="$1" '$1 == r && $2 == "ALLOW" { found = 1 } END { exit !found }'; }
 
+# ufw_rule_add RULE: append RULE to CFG[UFW_ALLOW] unless it is already listed.
+ufw_rule_add() {
+    [[ " ${CFG[UFW_ALLOW]} " == *" $1 "* ]] || CFG[UFW_ALLOW]+=" $1"
+}
+
 ufw_collect() {
     local ssh_port answer item i
     local -a labels=() selected=() extra=()
@@ -29,14 +50,15 @@ ufw_collect() {
     ui_checklist ufw.rules.title labels selected || return 1
     CFG[UFW_ALLOW]="$ssh_port/tcp"
     for i in "${!UFW_COMMON_RULES[@]}"; do
-        [[ ${selected[$i]} == 1 ]] && CFG[UFW_ALLOW]+=" ${UFW_COMMON_RULES[$i]}"
+        [[ ${selected[$i]} == 1 ]] || continue
+        for item in ${UFW_COMMON_RULES[$i]}; do ufw_rule_add "$item"; done
     done
     if [[ ${selected[${#UFW_COMMON_RULES[@]}]} == 1 ]]; then
         while true; do
             ui_prompt answer ufw.prompt.other || return 1
             IFS=', ' read -r -a extra <<<"$answer"
             for item in "${extra[@]}"; do valid_ufw_rule "$item" || { ui_warn ufw.invalid_rule "$item"; continue 2; }; done
-            for item in "${extra[@]}"; do [[ " ${CFG[UFW_ALLOW]} " == *" $item "* ]] || CFG[UFW_ALLOW]+=" $item"; done
+            for item in "${extra[@]}"; do ufw_rule_add "$item"; done
             break
         done
     fi

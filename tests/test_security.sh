@@ -74,7 +74,15 @@ account_install_key jack "$key"
 for rule in 22 22/tcp 51820/udp 65535; do assert_true "ufw rule $rule" valid_ufw_rule "$rule"; done
 for rule in 0 65536 22/icmp tcp '22 tcp'; do assert_false "ufw rule $rule" valid_ufw_rule "$rule"; done
 CFG[SSH_PORT]=2222
-ufw_collect >/dev/null 2>&1 <<<$'2 3\n\n8080/tcp, bad\n8080/tcp, 51820/udp'
+assert_eq 'one label per common rule' "${#UFW_COMMON_RULES[@]}" "${#UFW_COMMON_KEYS[@]}"
+for entry in "${UFW_COMMON_RULES[@]}"; do
+    for rule in $entry; do assert_true "common rule $rule" valid_ufw_rule "$rule"; done
+done
+CFG[SSH_PORT]=8443
+ufw_collect >/dev/null 2>&1 <<<$'3 4 14\n\n'
+assert_eq 'multi-port entries, no duplicate of the ssh port' '8443/tcp 8080/tcp 445/tcp 53/tcp 53/udp' "${CFG[UFW_ALLOW]}"
+CFG[SSH_PORT]=2222
+ufw_collect >/dev/null 2>&1 <<<$'2 17\n\n8080/tcp, bad\n8080/tcp, 51820/udp'
 assert_eq 'ssh port first, then extras' '2222/tcp 443/tcp 8080/tcp 51820/udp' "${CFG[UFW_ALLOW]}"
 printf 'Status: inactive\n' >"$WORK/ufw_status"
 reset_commands
