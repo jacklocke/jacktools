@@ -19,6 +19,12 @@ motd_news_file() { root_path /etc/default/motd-news; }
 
 motd_news_enabled() { [[ -f "$(motd_news_file)" ]] && ! grep -Eq '^ENABLED=0$' "$(motd_news_file)"; }
 
+# motd_news_render SOURCE: news disabled (ENABLED=0 replaced or added).
+motd_news_render() {
+    sed -E 's/^ENABLED=.*/ENABLED=0/' "$1"
+    grep -q '^ENABLED=' "$1" || printf 'ENABLED=0\n'
+}
+
 motd_compliant() { [[ -z "$(motd_active_scripts)" ]] && ! motd_news_enabled; }
 
 motd_collect() {
@@ -35,14 +41,10 @@ motd_plan() {
 }
 
 motd_apply() {
-    local name file candidate
+    local name file
     if motd_news_enabled; then
         file=$(motd_news_file)
-        fs_mktemp candidate
-        sed -E 's/^ENABLED=.*/ENABLED=0/' "$file" >"$candidate" || return 1
-        grep -q '^ENABLED=0$' "$candidate" || printf 'ENABLED=0\n' >>"$candidate"
-        backup_file "$file" motd-news >/dev/null || return 1
-        atomic_install "$candidate" "$file" 0644 || return 1
+        fs_write_managed "$file" motd-news 0644 motd_news_render "$file" || return 1
         run systemctl disable --now motd-news.timer >/dev/null 2>&1 || ui_warn motd.timer_failed
     fi
     while IFS= read -r name; do

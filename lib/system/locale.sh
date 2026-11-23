@@ -33,7 +33,7 @@ locale_available() {
 
 locale_collect() {
     local -a items=()
-    local current choice answer name
+    local current choice name
     # msg-keys: locale.choice.c locale.choice.it locale.choice.en
     current=$(locale_current)
     msg locale.current "${current:-$(msg_get locale.unset)}"
@@ -44,12 +44,7 @@ locale_collect() {
         CFG[LOCALE]="${LOCALE_CHOICES[$choice]}"
         return 0
     fi
-    while true; do
-        ui_prompt answer locale.prompt || return 1
-        [[ -n "$answer" ]] || return 1
-        if valid_locale "$answer"; then CFG[LOCALE]="$answer"; return 0; fi
-        ui_warn locale.invalid
-    done
+    ui_ask 'CFG[LOCALE]' valid_locale locale.invalid locale.prompt
 }
 
 locale_plan() {
@@ -63,28 +58,25 @@ locale_plan() {
     locale_available "${CFG[LOCALE]}" || msg locale.plan_generate "${CFG[LOCALE]}"
 }
 
-# /etc/default/locale rendered directly (same result as update-locale, but testable).
+# locale_render SOURCE VALUE: /etc/default/locale rendered directly (same result as
+# update-locale, but testable).
 locale_render() {
     awk -v value="$2" '
         /^LANG=/ { if (!done) print "LANG=" value; done = 1; next }
         { print }
         END { if (!done) print "LANG=" value }
-    ' "$1" >"$3"
+    ' "$1"
 }
 
 locale_apply() {
-    local file candidate
+    local file
     [[ "$(locale_current)" == "${CFG[LOCALE]}" ]] && return 0
     if ! locale_available "${CFG[LOCALE]}"; then
         command_exists locale-gen || { ui_error locale.no_locale_gen; return 1; }
         run locale-gen "${CFG[LOCALE]}" || { ui_error locale.generate_failed "${CFG[LOCALE]}"; return 1; }
     fi
     file=$(root_path /etc/default/locale)
-    [[ -e "$file" ]] || touch "$file" || return 1
-    fs_mktemp candidate
-    locale_render "$file" "${CFG[LOCALE]}" "$candidate" || return 1
-    backup_file "$file" default-locale >/dev/null || return 1
-    atomic_install "$candidate" "$file" 0644 || return 1
+    fs_write_managed "$file" default-locale 0644 locale_render "$(fs_source "$file")" "${CFG[LOCALE]}" || return 1
     state_flag NEW_SHELL
 }
 

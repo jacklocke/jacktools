@@ -19,9 +19,7 @@ docker_architecture() { dpkg --print-architecture 2>/dev/null; }
 docker_fetch_key() { curl -fsSL --proto '=https' "$DOCKER_KEY_URL" -o "$1"; }
 
 # Engine health after installation (replaced in tests).
-docker_engine_ok() {
-    systemctl is-active --quiet docker && docker info >/dev/null 2>&1 && docker run --rm hello-world >/dev/null
-}
+docker_engine_ok() { systemctl is-active --quiet docker && docker info >/dev/null 2>&1; }
 
 docker_compose_ok() { docker compose version >/dev/null 2>&1; }
 
@@ -69,7 +67,7 @@ docker_collect() {
     return 0
 }
 
-docker_sources_ok() { [[ -f "$(root_path "$DOCKER_SOURCES")" ]] && cmp -s <(docker_render_sources "${CFG[DOCKER_ARCH]}") "$(root_path "$DOCKER_SOURCES")"; }
+docker_sources_ok() { fs_file_matches "$(root_path "$DOCKER_SOURCES")" docker_render_sources "${CFG[DOCKER_ARCH]}"; }
 
 docker_plan() {
     local conflicts
@@ -85,24 +83,23 @@ docker_plan() {
 
 # Install key and source; on any failure restore the previous files and indexes.
 docker_setup_repository() {
-    local keyring sources key_candidate sources_candidate key_backup sources_backup
+    local keyring sources key_candidate key_undo=''
     keyring=$(root_path "$DOCKER_KEYRING")
     sources=$(root_path "$DOCKER_SOURCES")
-    mkdir -p -- "$(dirname -- "$keyring")" "$(dirname -- "$sources")" || return 1
     fs_mktemp key_candidate
-    fs_mktemp sources_candidate
     docker_fetch_key "$key_candidate" || { ui_error docker.key_download_failed; return 1; }
     grep -Fqx -- '-----BEGIN PGP PUBLIC KEY BLOCK-----' "$key_candidate" || { ui_error docker.key_invalid; return 1; }
-    docker_render_sources "${CFG[DOCKER_ARCH]}" >"$sources_candidate" || return 1
-    key_backup=$(backup_file "$keyring" docker-key) || return 1
-    sources_backup=$(backup_file "$sources" docker-sources) || return 1
-    if atomic_install "$key_candidate" "$keyring" 0644 && atomic_install "$sources_candidate" "$sources" 0644 &&
-        run apt-get update; then
-        APT_UPDATED=1
-        return 0
+    FS_UNDO=''
+    if fs_write_managed "$keyring" docker-key 0644 cat -- "$key_candidate"; then
+        key_undo=$FS_UNDO
+        FS_UNDO=''
+        if fs_write_managed "$sources" docker-sources 0644 docker_render_sources "${CFG[DOCKER_ARCH]}" && run apt-get update; then
+            APT_UPDATED=1
+            return 0
+        fi
     fi
-    if [[ -n "$key_backup" ]]; then cp -a -- "$key_backup" "$keyring"; else rm -f -- "$keyring"; fi
-    if [[ -n "$sources_backup" ]]; then cp -a -- "$sources_backup" "$sources"; else rm -f -- "$sources"; fi
+    fs_restore "$FS_UNDO" "$sources"
+    fs_restore "$key_undo" "$keyring"
     run apt-get update || true
     ui_error docker.repo_failed
     return 1

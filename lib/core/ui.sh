@@ -42,8 +42,6 @@ die() {
 
 ui_title() { printf '\n%s%s%s\n' "$BOLD" "$(msg_get "$@")" "$RESET"; }
 
-ui_separator() { printf '\n%s%s%s\n\n' "$YELLOW" '------------------------------------------------------------' "$RESET"; }
-
 # ui_prompt RESULT_VAR KEY [ARGS...]: free text; returns 1 on EOF.
 ui_prompt() {
     local -n ui_prompt_result="$1"
@@ -57,6 +55,56 @@ ui_prompt_secret() {
     IFS= read -r -s -p "$(msg_get "${@:2}") " ui_secret_result || ui_secret_rc=1
     printf '\n'
     return "$ui_secret_rc"
+}
+
+# ui_ask RESULT_VAR [--default VALUE] [--optional] [--upper] VALIDATOR INVALID_KEY PROMPT_KEY [ARGS...]
+# Asks until VALIDATOR accepts the answer; INVALID_KEY is shown with the answer as %s.
+# Empty input cancels (1), unless --default gives a non-empty VALUE (then validated like any
+# answer) or --optional accepts it as an empty value. --upper upper-cases the answer.
+ui_ask() {
+    local -n ui_ask_result="$1"
+    local ui_ask_default='' ui_ask_optional=0 ui_ask_upper=0 ui_ask_validator ui_ask_invalid ui_ask_answer
+    shift
+    while [[ "${1:-}" == --* ]]; do
+        case "$1" in
+            --default) ui_ask_default="$2"; shift 2 ;;
+            --optional) ui_ask_optional=1; shift ;;
+            --upper) ui_ask_upper=1; shift ;;
+            *) return 2 ;;
+        esac
+    done
+    ui_ask_validator="$1" ui_ask_invalid="$2"
+    shift 2
+    while true; do
+        ui_prompt ui_ask_answer "$@" || return 1
+        if [[ -z "$ui_ask_answer" ]]; then
+            if (( ui_ask_optional )); then ui_ask_result=''; return 0; fi
+            [[ -n "$ui_ask_default" ]] || return 1
+            ui_ask_answer="$ui_ask_default"
+        fi
+        if (( ui_ask_upper )); then ui_ask_answer=${ui_ask_answer^^}; fi
+        if "$ui_ask_validator" "$ui_ask_answer"; then ui_ask_result="$ui_ask_answer"; return 0; fi
+        ui_warn "$ui_ask_invalid" "$ui_ask_answer"
+    done
+}
+
+# ui_ask_list RESULT_VAR VALIDATOR INVALID_KEY PROMPT_KEY [ARGS...]: items separated by commas
+# or blanks, each one checked; the first invalid item is reported and the question repeated.
+# Empty input gives an empty list; EOF returns 1.
+ui_ask_list() {
+    local -n ui_ask_list_result="$1"
+    local ui_ask_list_validator="$2" ui_ask_list_invalid="$3" ui_ask_list_answer ui_ask_list_item
+    local -a ui_ask_list_items
+    shift 3
+    while true; do
+        ui_prompt ui_ask_list_answer "$@" || return 1
+        IFS=', ' read -r -a ui_ask_list_items <<<"$ui_ask_list_answer"
+        for ui_ask_list_item in "${ui_ask_list_items[@]}"; do
+            "$ui_ask_list_validator" "$ui_ask_list_item" || { ui_warn "$ui_ask_list_invalid" "$ui_ask_list_item"; continue 2; }
+        done
+        ui_ask_list_result="${ui_ask_list_items[*]}"
+        return 0
+    done
 }
 
 # ui_confirm KEY [ARGS...]: Y/y confirms; N/n, empty input or EOF decline.
@@ -126,7 +174,7 @@ ui_checklist() {
     fi
 }
 
-ui_checkbox() { [[ "$1" == 1 ]] && printf 'x' || printf ' '; }
+ui_checkbox() { if [[ "$1" == 1 ]]; then printf 'x'; else printf ' '; fi; }
 
 ui_checklist_interactive() {
     local -n ui_cl_labels="$2"

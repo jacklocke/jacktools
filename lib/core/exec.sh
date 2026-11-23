@@ -21,7 +21,20 @@ run() {
         return "${JACKTOOLS_TEST_RUN_RC:-0}"
     fi
     log_write CMD "${rendered# }"
+    run_drop_caches "$@"
     "$@"
+}
+
+# run_drop_caches CMD...: forget cached queries that CMD is about to change.
+run_drop_caches() {
+    local word
+    for word in "$@"; do [[ "$word" == env || "$word" == *=* ]] || break; done
+    case "${word##*/}" in
+        ufw) cache_drop ufw ;;
+        useradd|usermod|userdel|gpasswd|groupadd|groupdel) cache_drop passwd group ;;
+        apt-get|apt|dpkg) cache_drop dpkg ;;
+    esac
+    return 0
 }
 
 core_on_error() {

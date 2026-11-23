@@ -3,7 +3,6 @@
 set -Eeuo pipefail
 
 declare -gA MSG=()
-JT_MSG_LANG=""
 
 # Accepted catalog line: MSG[key]="value" (value without double quotes, $ or backticks).
 MSG_LINE_RE='^MSG\[([a-z][A-Za-z0-9_.]*)\]="([^"`$]*)"$'
@@ -28,7 +27,6 @@ msg_load() {
     done <"$file"
     MSG=()
     for key in "${!loaded[@]}"; do MSG["$key"]="${loaded[$key]}"; done
-    JT_MSG_LANG="$lang"
 }
 
 # msg_get KEY [ARGS...]: formatted text without trailing newline; unknown keys print [KEY].

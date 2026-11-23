@@ -5,11 +5,26 @@ set -Eeuo pipefail
 # fail2ban-client wrapper for read-only queries (replaced in tests).
 f2b_client() { fail2ban-client "$@" 2>/dev/null; }
 
-f2b_jails() { f2b_client status | sed -n 's/.*Jail list:[[:space:]]*//p' | tr ',' ' ' | xargs; }
-f2b_banned() { f2b_client status "$1" | sed -n 's/.*Banned IP list:[[:space:]]*//p' | xargs; }
+# Jails and banned addresses, space separated. Both return 1 when fail2ban-client does not
+# answer (service starting, no permission): callers test it in a condition, so the failure
+# is handled instead of reaching the ERR trap.
+f2b_jails() {
+    local out
+    out=$(f2b_client status) || return 1
+    sed -n 's/.*Jail list:[[:space:]]*//p' <<<"$out" | tr ',' ' ' | xargs
+}
 
+f2b_banned() {
+    local out
+    out=$(f2b_client status "$1") || return 1
+    sed -n 's/.*Banned IP list:[[:space:]]*//p' <<<"$out" | xargs
+}
+
+# f2b_available: fail2ban answers and has jails; F2B_JAILS holds them for the caller.
+F2B_JAILS=''
 f2b_available() {
-    command_exists fail2ban-client && [[ -n "$(f2b_jails)" ]] && return 0
+    F2B_JAILS=''
+    if command_exists fail2ban-client && F2B_JAILS=$(f2b_jails) && [[ -n "$F2B_JAILS" ]]; then return 0; fi
     ui_warn maint.f2b.unavailable
     return 1
 }
@@ -18,18 +33,19 @@ maint_f2b_list() {
     local jail ips
     f2b_available || return 0
     ui_title maint.f2b.list_title
-    for jail in $(f2b_jails); do
-        ips=$(f2b_banned "$jail")
+    for jail in $F2B_JAILS; do
+        ips=$(f2b_banned "$jail") || ips=''
         msg maint.f2b.jail "$jail" "${ips:-$(msg_get maint.f2b.none)}"
     done
 }
 
 maint_f2b_unban_one() {
-    local jail ip choice
+    local jail ip choice banned
     local -a labels=() jails=() ips=()
     f2b_available || return 0
-    for jail in $(f2b_jails); do
-        for ip in $(f2b_banned "$jail"); do labels+=("$ip ($jail)"); jails+=("$jail"); ips+=("$ip"); done
+    for jail in $F2B_JAILS; do
+        banned=$(f2b_banned "$jail") || banned=''
+        for ip in $banned; do labels+=("$ip ($jail)"); jails+=("$jail"); ips+=("$ip"); done
     done
     if (( ${#labels[@]} == 0 )); then ui_info maint.f2b.nothing_banned; return 0; fi
     ui_menu choice maint.f2b.unban_title labels || return 0
@@ -72,7 +88,7 @@ maint_f2b_whitelist() {
             ui_prompt answer maint.f2b.wl_prompt || continue
             [[ -n "$answer" ]] || continue
             if ! valid_ip_or_cidr "$answer"; then ui_warn fail2ban.invalid_ip "$answer"; continue; fi
-            [[ " ${CFG[F2B_IGNOREIP]} " == *" $answer "* ]] || CFG[F2B_IGNOREIP]=$(xargs <<<"${CFG[F2B_IGNOREIP]} $answer")
+            words_add 'CFG[F2B_IGNOREIP]' "$answer"
         else
             read -r -a entries <<<"${CFG[F2B_IGNOREIP]}"
             if (( ${#entries[@]} == 0 )); then ui_info maint.f2b.wl_empty; continue; fi
@@ -95,29 +111,20 @@ f2b_log_events() {
     fi
 }
 
-# ipv4_in_cidr IP CIDR: IPv4 address inside the network (a plain IP counts as /32).
-ipv4_to_int() { local a b c d; IFS=. read -r a b c d <<<"$1"; printf '%s' "$(( (a << 24) + (b << 16) + (c << 8) + d ))"; }
-ipv4_in_cidr() {
-    local ip="$1" net="${2%/*}" prefix="${2#*/}" mask
-    valid_ipv4 "$ip" && valid_ipv4 "$net" || return 1
-    [[ "$2" == */* ]] || prefix=32
-    mask=$(( prefix == 0 ? 0 : (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
-    (( ($(ipv4_to_int "$ip") & mask) == ($(ipv4_to_int "$net") & mask) ))
-}
-
 maint_f2b_status() {
     local jail
     f2b_available || return 0
-    { for jail in $(f2b_jails); do printf '\n== %s ==\n' "$jail"; f2b_client status "$jail"; done; } | ui_pager
+    { for jail in $F2B_JAILS; do printf '\n== %s ==\n' "$jail"; f2b_client status "$jail" || true; done; } | ui_pager
 }
 
 maint_f2b_search() {
-    local ip jail found=0
+    local ip jail banned found=0
     f2b_available || return 0
     ui_prompt ip maint.f2b.search_prompt || return 0
     [[ -n "$ip" ]] || return 0
-    for jail in $(f2b_jails); do
-        if [[ " $(f2b_banned "$jail") " == *" $ip "* ]]; then msg maint.f2b.search_banned "$ip" "$jail"; found=1; fi
+    for jail in $F2B_JAILS; do
+        banned=$(f2b_banned "$jail") || banned=''
+        if [[ " $banned " == *" $ip "* ]]; then msg maint.f2b.search_banned "$ip" "$jail"; found=1; fi
     done
     (( found )) || msg maint.f2b.search_free "$ip"
 }
@@ -127,13 +134,8 @@ maint_f2b_ban() {
     local ip jail choice
     local -a jails
     f2b_available || return 0
-    read -r -a jails <<<"$(f2b_jails)"
-    while true; do
-        ui_prompt ip maint.f2b.ban_prompt || return 0
-        [[ -n "$ip" ]] || return 0
-        valid_ip_or_cidr "$ip" && break
-        ui_warn fail2ban.invalid_ip "$ip"
-    done
+    read -r -a jails <<<"$F2B_JAILS"
+    ui_ask ip valid_ip_or_cidr fail2ban.invalid_ip maint.f2b.ban_prompt || return 0
     if [[ "$ip" == "$ENV_SSH_CLIENT_IP" ]] || { [[ -n "$ENV_SSH_CLIENT_IP" ]] && ipv4_in_cidr "$ENV_SSH_CLIENT_IP" "$ip"; }; then
         ui_error maint.f2b.ban_self
         return 0

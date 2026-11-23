@@ -8,10 +8,21 @@ status_service_state() { systemctl is-active "$1" 2>/dev/null || true; }
 # Upgradable packages according to the current APT lists (no update is run).
 status_upgradable_count() { apt list --upgradable 2>/dev/null | grep -c 'upgradable' || true; }
 
+# Banned addresses in every jail; 1 when fail2ban-client does not answer.
+status_f2b_banned() {
+    local jails jail ips total=0
+    jails=$(f2b_jails) || return 1
+    for jail in $jails; do
+        ips=$(f2b_banned "$jail") || return 1
+        total=$(( total + $(wc -w <<<"$ips") ))
+    done
+    printf '%s' "$total"
+}
+
 status_line() { printf '  %-26s %s\n' "$(msg_get "$1")" "$2"; }
 
 status_report() {
-    local service state banned=0 jail
+    local service state banned ufw_out
     ui_title maint.status.title
     status_line maint.status.host "$(hostname_current)"
     status_line maint.status.os "${ENV_OS_PRETTY:-?}"
@@ -29,11 +40,12 @@ status_report() {
         status_line maint.status.service "$service: ${state:-inactive}"
     done
     if command_exists ufw; then
-        if ufw_active; then status_line maint.status.firewall "$(msg_get maint.status.active)"
+        if ! ufw_out=$(ufw_status_cached); then status_line maint.status.firewall "$(msg_get maint.status.unavailable ufw)"
+        elif [[ $'\n'"$ufw_out" == *$'\n'"Status: active"* ]]; then status_line maint.status.firewall "$(msg_get maint.status.active)"
         else status_line maint.status.firewall "$(msg_get maint.status.inactive)"; fi
     fi
     if command_exists fail2ban-client && [[ "$(status_service_state fail2ban)" == active ]]; then
-        for jail in $(f2b_jails); do banned=$(( banned + $(f2b_banned "$jail" | wc -w) )); done
+        banned=$(status_f2b_banned) || banned=$(msg_get maint.status.unavailable fail2ban-client)
         status_line maint.status.banned "$banned"
     fi
 

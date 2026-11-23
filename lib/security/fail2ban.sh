@@ -11,48 +11,22 @@ F2B_DEFAULT_MAXRETRY="5"
 valid_duration() { [[ "$1" =~ ^[1-9][0-9]{0,5}[smhdw]$ ]]; }
 valid_maxretry() { [[ "$1" =~ ^[1-9][0-9]?$ ]]; }
 
-# IPv4, IPv4/prefix, or IPv6 with optional prefix.
-valid_ip_or_cidr() {
-    valid_ipv4 "$1" || valid_cidr "$1" || [[ "$1" =~ ^[0-9A-Fa-f:]*:[0-9A-Fa-f:]*(/([0-9]|[1-9][0-9]|1[01][0-9]|12[0-8]))?$ ]]
-}
-
 # Configuration test and service state (replaced in tests).
 f2b_config_test() { fail2ban-client -t >/dev/null 2>&1; }
 f2b_running() { systemctl is-active --quiet fail2ban 2>/dev/null; }
 
-# f2b_ask RESULT_VAR KEY DEFAULT VALIDATOR
-f2b_ask() {
-    local -n f2b_ask_result="$1"
-    local f2b_ask_key="$2" f2b_ask_default="$3" f2b_ask_validator="$4" f2b_ask_answer
-    while true; do
-        ui_prompt f2b_ask_answer "$f2b_ask_key" "$f2b_ask_default" || return 1
-        f2b_ask_answer=${f2b_ask_answer:-$f2b_ask_default}
-        if "$f2b_ask_validator" "$f2b_ask_answer"; then f2b_ask_result="$f2b_ask_answer"; return 0; fi
-        ui_warn fail2ban.invalid_value
-    done
-}
-
 fail2ban_collect() {
-    local value item
-    local -a items
-    f2b_ask value fail2ban.prompt.maxretry "$F2B_DEFAULT_MAXRETRY" valid_maxretry || return 1
-    CFG[F2B_MAXRETRY]="$value"
-    f2b_ask value fail2ban.prompt.findtime "$F2B_DEFAULT_FINDTIME" valid_duration || return 1
-    CFG[F2B_FINDTIME]="$value"
-    f2b_ask value fail2ban.prompt.bantime "$F2B_DEFAULT_BANTIME" valid_duration || return 1
-    CFG[F2B_BANTIME]="$value"
+    local extra
+    ui_ask 'CFG[F2B_MAXRETRY]' --default "$F2B_DEFAULT_MAXRETRY" valid_maxretry fail2ban.invalid_value fail2ban.prompt.maxretry "$F2B_DEFAULT_MAXRETRY" || return 1
+    ui_ask 'CFG[F2B_FINDTIME]' --default "$F2B_DEFAULT_FINDTIME" valid_duration fail2ban.invalid_value fail2ban.prompt.findtime "$F2B_DEFAULT_FINDTIME" || return 1
+    ui_ask 'CFG[F2B_BANTIME]' --default "$F2B_DEFAULT_BANTIME" valid_duration fail2ban.invalid_value fail2ban.prompt.bantime "$F2B_DEFAULT_BANTIME" || return 1
     CFG[F2B_IGNOREIP]=''
     if [[ -n "$ENV_SSH_CLIENT_IP" ]]; then
         ui_confirm fail2ban.confirm_own_ip "$ENV_SSH_CLIENT_IP" && CFG[F2B_IGNOREIP]="$ENV_SSH_CLIENT_IP"
     fi
-    while true; do
-        ui_prompt value fail2ban.prompt.whitelist || return 1
-        IFS=', ' read -r -a items <<<"$value"
-        for item in "${items[@]}"; do valid_ip_or_cidr "$item" || { ui_warn fail2ban.invalid_ip "$item"; continue 2; }; done
-        for item in "${items[@]}"; do [[ " ${CFG[F2B_IGNOREIP]} " == *" $item "* ]] || CFG[F2B_IGNOREIP]+=" $item"; done
-        break
-    done
-    CFG[F2B_IGNOREIP]=$(xargs <<<"${CFG[F2B_IGNOREIP]}")
+    ui_ask_list extra valid_ip_or_cidr fail2ban.invalid_ip fail2ban.prompt.whitelist || return 1
+    # shellcheck disable=SC2086 # Validated addresses, space separated.
+    words_add 'CFG[F2B_IGNOREIP]' $extra
     return 0
 }
 
@@ -63,7 +37,7 @@ fail2ban_render() {
     printf '\n[sshd]\nenabled = true\nport = %s\n' "${CFG[SSH_PORT]:-$(ssh_current_port)}"
 }
 
-fail2ban_file_ok() { [[ -f "$(root_path "$F2B_JAIL_FILE")" ]] && cmp -s <(fail2ban_render) "$(root_path "$F2B_JAIL_FILE")"; }
+fail2ban_file_ok() { fs_file_matches "$(root_path "$F2B_JAIL_FILE")" fail2ban_render; }
 
 fail2ban_plan() {
     if apt_is_installed fail2ban && fail2ban_file_ok && f2b_running; then msg steps.plan.compliant; return 0; fi
@@ -73,20 +47,16 @@ fail2ban_plan() {
 }
 
 fail2ban_apply() {
-    local file candidate backup
+    local file
     if ! apt_is_installed fail2ban; then
         apt_update_once || return 1
         apt_get install -- fail2ban || return 1
     fi
     file=$(root_path "$F2B_JAIL_FILE")
     if ! fail2ban_file_ok; then
-        mkdir -p -- "$(dirname -- "$file")" || return 1
-        fs_mktemp candidate
-        fail2ban_render >"$candidate" || return 1
-        backup=$(backup_file "$file" fail2ban-jail) || return 1
-        atomic_install "$candidate" "$file" 0644 || return 1
+        fs_write_managed "$file" fail2ban-jail 0644 fail2ban_render || return 1
         if ! f2b_config_test; then
-            if [[ -n "$backup" ]]; then cp -a -- "$backup" "$file"; else rm -f -- "$file"; fi
+            fs_restore "$FS_UNDO" "$file"
             ui_error fail2ban.config_invalid
             return 1
         fi

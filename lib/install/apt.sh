@@ -10,7 +10,12 @@ apt_get() {
     run env DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold "$@"
 }
 
-apt_is_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -Fq 'install ok installed'; }
+# Installed packages, one name per line (cached for the run, refreshed after apt-get).
+apt_installed_list() {
+    dpkg-query -W -f='${Package} ${Status}\n' 2>/dev/null | awk '$2 == "install" && $3 == "ok" && $4 == "installed" { print $1 }'
+}
+
+apt_is_installed() { [[ $'\n'"$(cache_get dpkg apt_installed_list)"$'\n' == *$'\n'"$1"$'\n'* ]]; }
 
 # apt_update_once: refresh the indexes once per run; nothing is installed if this fails.
 apt_update_once() {
@@ -43,7 +48,7 @@ parse_packages_file() {
 # ---- Step "upgrade"
 
 upgrade_collect() {
-    msg upgrade.os "${ENV_OS_PRETTY:-Ubuntu $ENV_OS_VERSION_ID}"
+    msg upgrade.os "${ENV_OS_PRETTY:-$ENV_OS_ID $ENV_OS_VERSION_ID}"
     CFG[UPGRADE]=yes
 }
 

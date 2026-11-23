@@ -80,15 +80,16 @@ steps_run() {
         steps_run_ready=()
     fi
 
-    for steps_run_id in "${steps_run_todo[@]}"; do
-        [[ "$JT_CONFIG_MODE" == 1 ]] && break
-        ui_title steps.collect.title "$(step_label "$steps_run_id")"
-        if "${steps_run_id}_collect"; then
-            steps_run_ready+=("$steps_run_id")
-        else
-            state_set "${STEP_LABEL[$steps_run_id]}" CANCELLED
-        fi
-    done
+    if [[ "$JT_CONFIG_MODE" != 1 ]]; then
+        for steps_run_id in "${steps_run_todo[@]}"; do
+            ui_title steps.collect.title "$(step_label "$steps_run_id")"
+            if "${steps_run_id}_collect"; then
+                steps_run_ready+=("$steps_run_id")
+            else
+                state_set "${STEP_LABEL[$steps_run_id]}" CANCELLED
+            fi
+        done
+    fi
     (( ${#steps_run_ready[@]} > 0 )) || return 0
 
     ui_title steps.plan.title

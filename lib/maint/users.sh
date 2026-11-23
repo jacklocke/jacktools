@@ -3,25 +3,11 @@
 set -Eeuo pipefail
 
 # Another administrator who can still log in when USER loses sudo.
-maint_other_admin() {
-    local user
-    while IFS= read -r user; do
-        [[ "$user" != "$1" ]] || continue
-        user_in_group "$user" sudo || continue
-        { user_has_key "$user" || [[ "$(user_password_state "$user")" == P ]]; } || continue
-        ssh_user_permitted "$user" && return 0
-    done < <(users_discover)
-    return 1
-}
+maint_other_admin() { ssh_admin_find --exclude "$1" >/dev/null; }
 
 maint_user_add_key() {
     local user="$1" key
-    while true; do
-        ui_prompt key customize.prompt.key "$user" || return 0
-        [[ -n "$key" ]] || return 0
-        if valid_ssh_public_key "$key"; then break; fi
-        ui_warn admin.invalid_key
-    done
+    ui_ask key valid_ssh_public_key admin.invalid_key customize.prompt.key "$user" || return 0
     account_install_key "$user" "$key" && ui_info maint.users.key_added "$user"
 }
 

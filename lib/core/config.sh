@@ -6,6 +6,7 @@ set -Eeuo pipefail
 
 JT_CONFIG_MODE=0
 JT_ASSUME_YES=0
+# Keys the export writes commented out (server-specific values).
 
 # Key -> validator. "list:<fn>" checks every space-separated item; "enum:a|b" fixed values.
 declare -gA CONFIG_VALIDATOR=(
@@ -63,6 +64,9 @@ declare -gA CONFIG_REQUIRED=(
     [fail2ban]="F2B_MAXRETRY F2B_FINDTIME F2B_BANTIME" [remove_ubuntu]="REMOVE_HOME REMOVE_MAIL"
 )
 
+# Keys that may be empty; they default to empty when a step runs from --config.
+CONFIG_OPTIONAL=(ADMIN_FULLNAME ADMIN_KEY NET_CIDR NET_GATEWAY NET_DNS NET_SEARCH F2B_IGNOREIP BANNER_TEXT PL_THEME)
+
 # Export order: one section per step, in execution order.
 CONFIG_KEY_ORDER=(
     HOSTNAME LOCALE TIMEZONE NTP NET_IFACE NET_MODE NET_CIDR NET_GATEWAY NET_DNS NET_SEARCH
@@ -96,7 +100,7 @@ config_validate() {
             for item in $value; do "${rule#list:}" "$item" || return 1; done
             return 0
             ;;
-        *) [[ -z "$value" && "$key" =~ ^(ADMIN_FULLNAME|ADMIN_KEY|BANNER_TEXT|PL_THEME|NET_.*|F2B_IGNOREIP)$ ]] || "$rule" "$value" ;;
+        *) [[ -z "$value" && " ${CONFIG_OPTIONAL[*]} " == *" $key "* ]] || "$rule" "$value" ;;
     esac
 }
 
@@ -131,31 +135,35 @@ config_load() {
     log_write INFO "configuration loaded from $file"
 }
 
+# config_need ID KEY: report KEY as missing for step ID (always returns 1).
+config_need() { ui_error config.missing_key "$2" "$(step_label "$1")"; return 1; }
+
 # config_check_step ID: required keys present (and coherent) for a step run from --config.
 config_check_step() {
-    local id="$1" key user
+    local id="$1" key user extras
     for key in ${CONFIG_REQUIRED[$id]:-}; do
-        [[ -v "CFG[$key]" ]] || { ui_error config.missing_key "$key" "$(step_label "$id")"; return 1; }
+        [[ -v "CFG[$key]" ]] || { config_need "$id" "$key"; return 1; }
     done
     case "$id" in
         network)
-            [[ "${CFG[NET_MODE]}" == dhcp || -n "${CFG[NET_DNS]:-}" ]] || { ui_error config.missing_key NET_DNS "$(step_label "$id")"; return 1; }
-            if [[ "${CFG[NET_MODE]}" == static ]]; then
-                [[ -n "${CFG[NET_CIDR]:-}" && -n "${CFG[NET_GATEWAY]:-}" ]] || { ui_error config.missing_key NET_CIDR "$(step_label "$id")"; return 1; }
+            [[ "${CFG[NET_MODE]}" == dhcp || -n "${CFG[NET_DNS]:-}" ]] || { config_need "$id" NET_DNS; return 1; }
+            if [[ "${CFG[NET_MODE]}" == static && ( -z "${CFG[NET_CIDR]:-}" || -z "${CFG[NET_GATEWAY]:-}" ) ]]; then
+                config_need "$id" NET_CIDR; return 1
             fi
             ;;
         customize)
             for user in ${CFG[CUSTOM_USERS]}; do
-                [[ -v "CFG[CUSTOM_MODULES:$user]" ]] || { ui_error config.missing_key "CUSTOM_MODULES:$user" "$(step_label "$id")"; return 1; }
-                [[ " ${CFG["CUSTOM_EXTRAS:$user"]:-} " != *" ssh_key "* || -n "${CFG["CUSTOM_KEY:$user"]:-}" ]] || { ui_error config.missing_key "CUSTOM_KEY:$user" "$(step_label "$id")"; return 1; }
-                [[ " ${CFG["CUSTOM_EXTRAS:$user"]:-} " != *" sudo "* || -n "${CFG["CUSTOM_SUDO:$user"]:-}" ]] || { ui_error config.missing_key "CUSTOM_SUDO:$user" "$(step_label "$id")"; return 1; }
+                [[ -v "CFG[CUSTOM_MODULES:$user]" ]] || { config_need "$id" "CUSTOM_MODULES:$user"; return 1; }
+                extras=" ${CFG["CUSTOM_EXTRAS:$user"]:-} "
+                if [[ "$extras" == *" ssh_key "* && -z "${CFG["CUSTOM_KEY:$user"]:-}" ]]; then config_need "$id" "CUSTOM_KEY:$user"; return 1; fi
+                if [[ "$extras" == *" sudo "* && -z "${CFG["CUSTOM_SUDO:$user"]:-}" ]]; then config_need "$id" "CUSTOM_SUDO:$user"; return 1; fi
             done
-            [[ "${CFG[BANNER]}" != custom || -n "${CFG[BANNER_TEXT]:-}" ]] || { ui_error config.missing_key BANNER_TEXT "$(step_label "$id")"; return 1; }
-            ! custom_any_module powerline-theme || [[ -n "${CFG[PL_THEME]:-}" ]] || { ui_error config.missing_key PL_THEME "$(step_label "$id")"; return 1; }
+            if [[ "${CFG[BANNER]}" == custom && -z "${CFG[BANNER_TEXT]:-}" ]]; then config_need "$id" BANNER_TEXT; return 1; fi
+            if custom_any_module powerline-theme && [[ -z "${CFG[PL_THEME]:-}" ]]; then config_need "$id" PL_THEME; return 1; fi
             ;;
     esac
-    # Optional values default to empty.
-    for key in ADMIN_FULLNAME ADMIN_KEY ADMIN_PASSWORD NET_CIDR NET_GATEWAY NET_DNS NET_SEARCH F2B_IGNOREIP BANNER_TEXT PL_THEME; do
+    # Optional values default to empty; the admin password never comes from a file.
+    for key in "${CONFIG_OPTIONAL[@]}" ADMIN_PASSWORD; do
         [[ -v "CFG[$key]" ]] || CFG["$key"]=''
     done
     if declare -F "${id}_config_prepare" >/dev/null; then "${id}_config_prepare" || return 1; fi

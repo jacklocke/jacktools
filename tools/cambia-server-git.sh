@@ -14,7 +14,7 @@ set -Eeuo pipefail
 CS_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 # Never touched: CLAUDE.md (documents several servers on purpose), other projects' scripts,
 # test data, previous backups.
-CS_EXCLUDE_RE='^(\.git/|CLAUDE\.md$|assets/drin\.sh$|assets/tmux-login-menu\.sh$|tests/|\.cambia-server-backup-)'
+CS_EXCLUDE_RE='^(\.git/|CLAUDE\.md$|assets/drin\.sh$|assets/tmux-login-menu\.sh$|\.cambia-server-backup-)'
 
 # bs_* helpers and DEFAULT_*: bootstrap.sh runs nothing when sourced.
 # shellcheck source=/dev/null

@@ -7,9 +7,19 @@ set -Eeuo pipefail
 : "${JACKTOOLS_ROOT:=}"
 : "${JACKTOOLS_BACKUP_ROOT:=/var/backups/jacktools}"
 declare -ga JT_TEMP_PATHS=()
+# How to undo the last fs_write_managed: "" nothing, "remove" new file, or the backup path.
+FS_UNDO=""
+# Per-run cache directory (created by main; empty in tests, where nothing is cached).
+: "${JT_CACHE_DIR:=}"
 
 # root_path PATH: system path, relocated under JACKTOOLS_ROOT in tests.
 root_path() { printf '%s%s' "$JACKTOOLS_ROOT" "$1"; }
+
+# fs_source FILE: FILE when it exists, /dev/null otherwise (input for renderers).
+fs_source() { if [[ -e "$1" ]]; then printf '%s' "$1"; else printf /dev/null; fi; }
+
+# fs_chown OWNER:GROUP PATH...: only when running as root (tests run unprivileged).
+fs_chown() { [[ ${EUID} -ne 0 ]] || chown "$@"; }
 
 # fs_mktemp RESULT_VAR [-d]: temporary file (or directory) removed on exit.
 fs_mktemp() {
@@ -63,6 +73,61 @@ atomic_install() {
         rm -f -- "$temporary"
         return 1
     fi
+}
+
+# fs_file_matches FILE CMD [ARGS...]: FILE exists and holds exactly the output of CMD.
+fs_file_matches() {
+    local file="$1"
+    shift
+    [[ -f "$file" ]] && cmp -s <("$@") "$file"
+}
+
+# fs_write_managed FILE LABEL MODE CMD [ARGS...]: write the output of CMD to FILE (a real
+# path, already passed through root_path). Nothing happens when FILE already matches;
+# otherwise parent directory, backup and atomic install. FS_UNDO tells fs_restore how to
+# take the change back.
+fs_write_managed() {
+    local file="$1" label="$2" mode="$3" candidate backup
+    shift 3
+    FS_UNDO=""
+    fs_mktemp candidate
+    "$@" >"$candidate" || return 1
+    [[ -f "$file" ]] && cmp -s "$candidate" "$file" && return 0
+    [[ "$JACKTOOLS_DRY_RUN" == 1 ]] && return 0
+    mkdir -p -- "$(dirname -- "$file")" || return 1
+    backup=$(backup_file "$file" "$label") || return 1
+    atomic_install "$candidate" "$file" "$mode" || return 1
+    FS_UNDO="${backup:-remove}"
+}
+
+# fs_restore UNDO FILE: take back a change recorded by fs_write_managed (FS_UNDO).
+fs_restore() {
+    case "$1" in
+        '') return 0 ;;
+        remove) rm -f -- "$2" ;;
+        *) cp -a -- "$1" "$2" ;;
+    esac
+}
+
+# cache_get NAME CMD [ARGS...]: output of a slow read-only query, run once per JackTools run
+# (stored as a file, so it also survives subshells). Failures are not cached.
+cache_get() {
+    local name="$1" file rc=0
+    shift
+    if [[ -z "$JT_CACHE_DIR" ]]; then "$@"; return; fi
+    file="$JT_CACHE_DIR/$name"
+    if [[ ! -f "$file" ]]; then
+        "$@" >"$file.tmp" || rc=$?
+        if (( rc == 0 )); then mv -f -- "$file.tmp" "$file"; else cat -- "$file.tmp"; rm -f -- "$file.tmp"; return "$rc"; fi
+    fi
+    cat -- "$file"
+}
+
+# cache_drop NAME...: forget cached answers after a change.
+cache_drop() {
+    local name
+    [[ -n "$JT_CACHE_DIR" ]] || return 0
+    for name in "$@"; do rm -f -- "$JT_CACHE_DIR/$name"; done
 }
 
 # managed_block_status FILE BEGIN END: 0 one well-formed block, 1 no block, 2 malformed.

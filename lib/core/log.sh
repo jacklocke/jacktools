@@ -15,9 +15,10 @@ log_target() {
 
 # log_write LEVEL MESSAGE: one line per event; logging failures never stop the tool.
 log_write() {
-    local level="$1" message="$2" line
-    printf -v line '%s [%s] %s' "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "${message//$'\n'/ }"
-    { printf '%s\n' "$line" >>"$(log_target)"; } 2>/dev/null || true
+    local level="$1" message="$2" line target="$JACKTOOLS_LOG"
+    [[ "$JACKTOOLS_TEST_MODE" != 1 ]] || target="${JACKTOOLS_TEST_LOG:-/dev/null}"
+    printf -v line '%(%Y-%m-%d %H:%M:%S)T [%s] %s' -1 "$level" "${message//$'\n'/ }"
+    { printf '%s\n' "$line" >>"$target"; } 2>/dev/null || true
 }
 
 # log_init: create the real log with mode 0600 (no-op in test mode).

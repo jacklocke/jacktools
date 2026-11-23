@@ -69,14 +69,14 @@ ssh_session_check() {
 # and keep it only once a new login has been confirmed.
 ssh_session_write() {
     local -n ssh_session_updates="$1"
-    local file candidate backup line key
+    local file candidate line key rc=0
     local -A values=()
     while IFS=' ' read -r key line; do [[ -n "$key" ]] && values["$key"]="$line"; done < <(ssh_session_current)
     for line in "${ssh_session_updates[@]}"; do values["${line%% *}"]="${line#* }"; done
     file=$(root_path "$SSH_SESSION_FILE")
     fs_mktemp candidate
     {
-        printf '# Managed by JackTools (Manutenzione → SSH).\n'
+        printf '# Managed by JackTools (maintenance, SSH).\n'
         for key in "${!values[@]}"; do printf '%s %s\n' "$key" "${values[$key]}"; done | LC_ALL=C sort
     } >"$candidate"
     if [[ -f "$file" ]] && cmp -s "$candidate" "$file"; then ui_info maint.ssh.unchanged; return 0; fi
@@ -84,21 +84,10 @@ ssh_session_write() {
     sed 's/^/  /' "$candidate"
     ui_confirm maint.ssh.confirm_write "$SSH_SESSION_FILE" || return 0
     if [[ "$JACKTOOLS_DRY_RUN" == 1 ]]; then msg cleanup.dry_run; return 0; fi
-    mkdir -p -- "$(dirname -- "$file")" || return 1
-    backup=$(backup_file "$file" sshd-session) || return 1
-    atomic_install "$candidate" "$file" 0644 || return 1
-    if sshd_config_test >/dev/null 2>&1 && ssh_reload; then
-        msg ssh.test_new_session "$(ssh_current_port)"
-        if ui_confirm ssh.confirm_new_session; then
-            ui_info maint.ssh.saved
-            ssh_session_check ssh_session_updates
-            return 0
-        fi
-    fi
-    if [[ -n "$backup" ]]; then cp -a -- "$backup" "$file"; else rm -f -- "$file"; fi
-    ssh_reload || true
-    ui_warn ssh.config_restored
-    return 1
+    ssh_dropin_install "$file" sshd-session 0644 "$candidate" "$(ssh_current_port)" '' || rc=$?
+    (( rc == 0 )) || return 1
+    ui_info maint.ssh.saved
+    ssh_session_check ssh_session_updates
 }
 
 maint_ssh_session() {
@@ -108,12 +97,8 @@ maint_ssh_session() {
     for entry in "${SSH_SESSION_SETTINGS[@]}"; do
         IFS='|' read -r key validator prompt <<<"$entry"
         current=$(ssh_effective "$key")
-        while true; do
-            ui_prompt answer "$prompt" "${current:-?}" || return 0
-            [[ -n "$answer" ]] || break
-            if "$validator" "$answer"; then updates+=("$key $answer"); break; fi
-            ui_warn maint.ssh.invalid_value
-        done
+        ui_ask answer --optional "$validator" maint.ssh.invalid_value "$prompt" "${current:-?}" || return 0
+        [[ -z "$answer" ]] || updates+=("$key $answer")
     done
     if (( ${#updates[@]} == 0 )); then ui_info maint.ssh.unchanged; return 0; fi
     ssh_session_write updates || true

@@ -31,6 +31,24 @@ pl_generate() {
     XDG_CONFIG_HOME="$1" python3 "$JACKTOOLS_DIR/assets/$PL_GENERATOR" >/dev/null
 }
 
+# pl_generated RESULT_VAR: a directory with freshly generated schemes under powerline/. The
+# output does not depend on the user, so it is generated once per run when caching is on.
+pl_generated() {
+    local -n pl_generated_result="$1"
+    local pl_generated_dir
+    if [[ -n "$JT_CACHE_DIR" ]]; then
+        pl_generated_dir="$JT_CACHE_DIR/powerline-generated"
+        if [[ ! -d "$pl_generated_dir/powerline" ]]; then
+            mkdir -p -- "$pl_generated_dir" || return 1
+            pl_generate "$pl_generated_dir" || { rm -rf -- "$pl_generated_dir"; return 1; }
+        fi
+    else
+        fs_mktemp pl_generated_dir -d
+        pl_generate "$pl_generated_dir" || return 1
+    fi
+    pl_generated_result="$pl_generated_dir"
+}
+
 # Generated files, relative to .config/powerline.
 pl_generated_list() { (cd -- "$1/powerline" && find colors.json colorschemes -type f | LC_ALL=C sort); }
 
@@ -38,8 +56,7 @@ pl_generated_list() { (cd -- "$1/powerline" && find colors.json colorschemes -ty
 pl_generated_ok() {
     local user="$1" dir rel base
     base="$(user_home "$user")/.config/powerline"
-    fs_mktemp dir -d
-    pl_generate "$dir" || return 1
+    pl_generated dir || return 1
     while IFS= read -r rel; do
         cmp -s "$dir/powerline/$rel" "$base/$rel" || return 1
     done < <(pl_generated_list "$dir")
@@ -50,8 +67,7 @@ pl_apply_generated() {
     local user="$1" dir rel base group
     base="$(user_home "$user")/.config/powerline"
     group=$(user_primary_group "$user")
-    fs_mktemp dir -d
-    pl_generate "$dir" || { ui_error customize.pl_theme.generate_failed; return 1; }
+    pl_generated dir || { ui_error customize.pl_theme.generate_failed; return 1; }
     while IFS= read -r rel; do
         cmp -s "$dir/powerline/$rel" "$base/$rel" && continue
         custom_make_dirs "$user" ".config/powerline/$rel" || return 1
@@ -80,8 +96,8 @@ pl_gallery() {
         ui_warn customize.pl_theme.no_gallery
         return 0
     fi
-    # "(attivo)" would refer to the temporary copy: dropped, like the closing hint.
-    XDG_CONFIG_HOME="$dir" bash "$JACKTOOLS_DIR/assets/plcolors.sh" | sed -e '$d' -e 's/  (attivo)$//' | ui_pager
+    # Embedded mode: no "current scheme" marker (it would be the temporary copy) and no hint.
+    XDG_CONFIG_HOME="$dir" PLCOLORS_EMBEDDED=1 bash "$JACKTOOLS_DIR/assets/plcolors.sh" | ui_pager
 }
 
 # pl_choose: sets CFG[PL_THEME]; the gallery entry shows every theme and asks again.

@@ -6,19 +6,11 @@ set -Eeuo pipefail
 ADMIN_SHELL="/bin/bash"
 
 admin_collect() {
-    local name answer password confirm choice
-    local -a sudo_modes
-    while true; do
-        ui_prompt name admin.prompt.name || return 1
-        [[ -n "$name" ]] || return 1
-        if valid_username "$name" && [[ "$name" != root ]]; then break; fi
-        ui_warn admin.invalid_name
-    done
+    local name password confirm
+    ui_ask name valid_admin_name admin.invalid_name admin.prompt.name || return 1
     CFG[ADMIN_USER]="$name"
     user_exists "$name" && ui_info admin.exists "$name"
-    ui_prompt answer admin.prompt.fullname || return 1
-    [[ "$answer" != *:* ]] || { ui_warn admin.invalid_fullname; answer=${answer//:/}; }
-    CFG[ADMIN_FULLNAME]="$answer"
+    ui_ask 'CFG[ADMIN_FULLNAME]' --optional valid_fullname admin.invalid_fullname admin.prompt.fullname || return 1
     CFG[ADMIN_PASSWORD]=''
     while true; do
         ui_prompt_secret password admin.prompt.password || return 1
@@ -27,20 +19,11 @@ admin_collect() {
         if [[ "$password" == "$confirm" ]]; then CFG[ADMIN_PASSWORD]="$password"; break; fi
         ui_warn admin.password_mismatch
     done
-    CFG[ADMIN_KEY]=''
-    while true; do
-        ui_prompt answer admin.prompt.key || return 1
-        [[ -n "$answer" ]] || break
-        if valid_ssh_public_key "$answer"; then CFG[ADMIN_KEY]="$answer"; break; fi
-        ui_warn admin.invalid_key
-    done
+    ui_ask 'CFG[ADMIN_KEY]' --optional valid_ssh_public_key admin.invalid_key admin.prompt.key || return 1
     if [[ -z "${CFG[ADMIN_PASSWORD]}" && -z "${CFG[ADMIN_KEY]}" ]] && ! user_exists "$name"; then
         ui_warn admin.no_authentication
     fi
-    sudo_modes=("$(msg_get admin.sudo.password)" "$(msg_get admin.sudo.nopasswd)")
-    ui_menu choice admin.sudo.title sudo_modes ui.menu.cancel || return 1
-    if (( choice == 0 )); then CFG[ADMIN_SUDO]=password; else CFG[ADMIN_SUDO]=nopasswd; fi
-    return 0
+    account_ask_sudo 'CFG[ADMIN_SUDO]'
 }
 
 admin_plan() {

@@ -67,7 +67,7 @@ ROWS=24 COLS=80      # dimensioni del terminale
 TIMER_ON=0           # 1 = countdown attivo
 REMAINING=$TIMEOUT   # secondi rimanenti del countdown
 TIMER_JUST_STOPPED=0 # 1 = l'ultimo tasto ha appena fermato il timer
-KEY= KEYCHAR=        # ultimo tasto letto
+KEY='' KEYCHAR=''    # ultimo tasto letto
 SEL=0 OFFSET=0       # riga selezionata e prima riga visibile del menu
 S_NAME=() S_ATT=() S_WIN=()   # sessioni: nome, client collegati, finestre
 NAMEW=4 ITEMW=16     # larghezze di colonna del menu
@@ -301,7 +301,7 @@ screen_empty() {
             term_size
             lines=()
             fit "Nessuna sessione tmux."; lines+=("$REPLY")
-            fit "Premi → o Invio per creare la sessione A, ← o Esc per uscire."; lines+=("$REPLY")
+            fit "Invio crea la sessione A · → scegli un nome · ← o Esc per uscire."; lines+=("$REPLY")
             (( TIMER_ON )) && { countdown_text; lines+=("$REPLY"); }
             draw_block "${lines[@]}"
             need=0
@@ -310,8 +310,15 @@ screen_empty() {
         (( TIMER_JUST_STOPPED )) && need=1   # rimuove la riga del countdown
         case "$KEY" in
             # -A: se nel frattempo A è stata creata, ci si collega
-            RIGHT | ENTER | EXPIRED) new_session A ;;
-            LEFT | ESC)    exit 0 ;;
+            ENTER | EXPIRED) new_session A ;;
+            RIGHT)
+                input_name   # ritorna solo se l'utente torna indietro
+                load_sessions
+                # nel frattempo un'altra connessione ha creato una sessione
+                (( ${#S_NAME[@]} > 0 )) && screen_list
+                need=1
+                ;;
+            LEFT | ESC) exit 0 ;;
         esac
     done
 }
@@ -399,7 +406,7 @@ screen_list() {
 # Inserimento del nome: nuova sessione, oppure rinomina della sessione $1
 # ---------------------------------------------------------------------------
 input_name() {
-    local old=$1 name= warn= def= final lines i
+    local old=$1 name='' warn='' def='' final lines i
     load_sessions
     if [ -n "$old" ]; then
         name=$old   # si parte dal nome attuale: Backspace per modificarlo

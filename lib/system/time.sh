@@ -20,16 +20,10 @@ time_ntp_enabled() {
 time_ntp_supported() { [[ "$ENV_VIRT_KIND" != container ]]; }
 
 time_collect() {
-    local current answer
+    local current
     current=$(time_current_zone)
     msg time.current "${current:-?}"
-    while true; do
-        ui_prompt answer time.prompt "${current:-?}" || return 1
-        answer="${answer:-$current}"
-        [[ -n "$answer" ]] || return 1
-        if valid_timezone "$answer"; then CFG[TIMEZONE]="$answer"; break; fi
-        ui_warn time.invalid
-    done
+    ui_ask 'CFG[TIMEZONE]' --default "$current" valid_timezone time.invalid time.prompt "${current:-?}" || return 1
     CFG[NTP]=keep
     if time_ntp_supported; then
         ui_confirm time.ntp_confirm && CFG[NTP]=on

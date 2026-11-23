@@ -24,25 +24,18 @@ unattended_render_jacktools() {
     fi
 }
 
-unattended_file_ok() { [[ -f "$(root_path "$2")" ]] && cmp -s <("$1") "$(root_path "$2")"; }
-
-unattended_compliant() {
-    apt_is_installed unattended-upgrades &&
-        unattended_file_ok unattended_render_periodic "$UNATTENDED_PERIODIC" &&
-        unattended_file_ok unattended_render_jacktools "$UNATTENDED_JACKTOOLS"
+unattended_files_ok() {
+    fs_file_matches "$(root_path "$UNATTENDED_PERIODIC")" unattended_render_periodic &&
+        fs_file_matches "$(root_path "$UNATTENDED_JACKTOOLS")" unattended_render_jacktools
 }
 
+unattended_compliant() { apt_is_installed unattended-upgrades && unattended_files_ok; }
+
 unattended_collect() {
-    local answer
     ui_confirm unattended.confirm || return 1
     CFG[UNATTENDED_REBOOT]=no
     if ui_confirm unattended.reboot_confirm; then
-        while true; do
-            ui_prompt answer unattended.reboot_time "$UNATTENDED_DEFAULT_TIME" || return 1
-            answer=${answer:-$UNATTENDED_DEFAULT_TIME}
-            if valid_reboot_time "$answer"; then CFG[UNATTENDED_REBOOT]="$answer"; break; fi
-            ui_warn unattended.invalid_time
-        done
+        ui_ask 'CFG[UNATTENDED_REBOOT]' --default "$UNATTENDED_DEFAULT_TIME" valid_reboot_time unattended.invalid_time unattended.reboot_time "$UNATTENDED_DEFAULT_TIME" || return 1
     fi
     return 0
 }
@@ -54,32 +47,20 @@ unattended_plan() {
     if [[ "${CFG[UNATTENDED_REBOOT]}" == no ]]; then msg unattended.plan_no_reboot; else msg unattended.plan_reboot "${CFG[UNATTENDED_REBOOT]}"; fi
 }
 
-unattended_write() {
-    local renderer="$1" path="$2" label="$3" file candidate
-    unattended_file_ok "$renderer" "$path" && return 0
-    file=$(root_path "$path")
-    mkdir -p -- "$(dirname -- "$file")" || return 1
-    fs_mktemp candidate
-    "$renderer" >"$candidate" || return 1
-    backup_file "$file" "$label" >/dev/null || return 1
-    atomic_install "$candidate" "$file" 0644
-}
-
 unattended_apply() {
     if ! apt_is_installed unattended-upgrades; then
         apt_update_once || return 1
         apt_get install -- unattended-upgrades || return 1
     fi
-    unattended_write unattended_render_periodic "$UNATTENDED_PERIODIC" apt-20auto-upgrades || return 1
-    unattended_write unattended_render_jacktools "$UNATTENDED_JACKTOOLS" apt-52jacktools || return 1
+    fs_write_managed "$(root_path "$UNATTENDED_PERIODIC")" apt-20auto-upgrades 0644 unattended_render_periodic || return 1
+    fs_write_managed "$(root_path "$UNATTENDED_JACKTOOLS")" apt-52jacktools 0644 unattended_render_jacktools || return 1
     run systemctl enable --now unattended-upgrades >/dev/null 2>&1 || ui_warn unattended.service_failed
     return 0
 }
 
 unattended_verify() {
     [[ "$JACKTOOLS_DRY_RUN" == 1 ]] && return 0
-    unattended_file_ok unattended_render_periodic "$UNATTENDED_PERIODIC" &&
-        unattended_file_ok unattended_render_jacktools "$UNATTENDED_JACKTOOLS"
+    unattended_files_ok
 }
 
 step_register unattended step.unattended install 1

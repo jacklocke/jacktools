@@ -36,6 +36,21 @@ curl -fsSL https://raw.githubusercontent.com/jacklocke/jacktools/refs/heads/main
 
 Le opzioni di JackTools vanno dopo `--`, ad esempio `... --repo <url> -- all --dry-run`.
 
+### Avvio locale
+
+```bash
+sudo bash jacktools.sh --dry-run        # menu, senza applicare modifiche
+sudo bash jacktools.sh all --dry-run    # configurazione completa, senza applicare modifiche
+sudo bash jacktools.sh                  # menu, modifiche reali
+```
+
+Per provare solo una parte, es. "UFW":
+```bash
+sudo bash jacktools.sh ufw --dry-run
+```
+
+---
+
 ## Uso
 
 | Comando | Cosa fa |

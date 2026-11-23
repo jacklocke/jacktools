@@ -10,30 +10,20 @@ hostname_current() {
     printf '%s' "${name%%.*}"
 }
 
-# hosts_render SOURCE OUTPUT NAME: 127.0.1.1 points to NAME (added when missing).
+# hosts_render SOURCE NAME: SOURCE with 127.0.1.1 pointing to NAME (added when missing).
 hosts_render() {
-    awk -v name="$3" '
+    awk -v name="$2" '
         /^[[:space:]]*#/ || NF == 0 { print; next }
         $1 == "127.0.1.1" { if (!done) printf "127.0.1.1\t%s\n", name; done = 1; next }
         { print }
         END { if (!done) printf "127.0.1.1\t%s\n", name }
-    ' "$1" >"$2"
+    ' "$1"
 }
 
 hostname_collect() {
-    local current answer
-    current=$(hostname_current)
-    msg hostname.current "$current"
+    msg hostname.current "$(hostname_current)"
     [[ "$ENV_VIRT_KIND" == container ]] && ui_warn hostname.container_warning
-    while true; do
-        ui_prompt answer hostname.prompt || return 1
-        [[ -n "$answer" ]] || return 1
-        if valid_hostname "$answer"; then
-            CFG[HOSTNAME]="$answer"
-            return 0
-        fi
-        ui_warn hostname.invalid
-    done
+    ui_ask 'CFG[HOSTNAME]' valid_hostname hostname.invalid hostname.prompt
 }
 
 hostname_plan() {
@@ -53,27 +43,28 @@ hostname_hosts_ok() {
 
 # /etc/hostname is written directly (what hostnamectl does for the static name), then
 # hostnamectl updates the running hostname.
+# hostname_write NAME: /etc/hostname and the running hostname.
+hostname_write() {
+    local candidate
+    fs_mktemp candidate
+    printf '%s\n' "$1" >"$candidate" || return 1
+    atomic_install "$candidate" "$(root_path /etc/hostname)" 0644 || return 1
+    run hostnamectl set-hostname "$1"
+}
+
 hostname_apply() {
-    local hosts hostname_file candidate name_candidate backup old
+    local hosts old
     old=$(hostname_current)
     hosts=$(root_path /etc/hosts)
-    hostname_file=$(root_path /etc/hostname)
-    [[ -e "$hosts" ]] || touch "$hosts" || return 1
-    fs_mktemp candidate
-    hosts_render "$hosts" "$candidate" "${CFG[HOSTNAME]}" || return 1
-    backup=$(backup_file "$hosts" hosts) || return 1
     if [[ "$old" != "${CFG[HOSTNAME]}" ]]; then
-        fs_mktemp name_candidate
-        printf '%s\n' "${CFG[HOSTNAME]}" >"$name_candidate" || return 1
-        backup_file "$hostname_file" hostname >/dev/null || return 1
-        atomic_install "$name_candidate" "$hostname_file" 0644 || return 1
-        run hostnamectl set-hostname "${CFG[HOSTNAME]}" || return 1
+        backup_file "$(root_path /etc/hostname)" hostname >/dev/null || return 1
+        hostname_write "${CFG[HOSTNAME]}" || return 1
     fi
-    if ! cmp -s "$candidate" "$hosts" && ! atomic_install "$candidate" "$hosts" 0644; then
+    # atomic_install leaves /etc/hosts untouched on failure: only the hostname is put back.
+    if ! fs_write_managed "$hosts" hosts 0644 hosts_render "$(fs_source "$hosts")" "${CFG[HOSTNAME]}"; then
         ui_error hostname.hosts_failed
-        printf '%s\n' "$old" >"$name_candidate" && atomic_install "$name_candidate" "$hostname_file" 0644
-        run hostnamectl set-hostname "$old" || true
-        [[ -n "$backup" ]] && cp -a -- "$backup" "$hosts"
+        [[ "$old" != "${CFG[HOSTNAME]}" ]] || return 1
+        hostname_write "$old" || true
         return "$STEP_RC_RESTORED"
     fi
     return 0

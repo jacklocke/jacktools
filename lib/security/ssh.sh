@@ -31,7 +31,10 @@ sshd_config_test() {
     "$binary" -t
 }
 
-ssh_policy_values() { sshd_effective_config | awk -v k="$1" 'tolower($1) == k { $1 = ""; sub(/^ /, ""); print }' | xargs; }
+# Effective configuration, read once per run and again after a JackTools drop-in changes.
+ssh_effective_config() { cache_get sshd sshd_effective_config; }
+
+ssh_policy_values() { ssh_effective_config | awk -v k="$1" 'tolower($1) == k { $1 = ""; sub(/^ /, ""); print }' | xargs; }
 
 ssh_value_matches_patterns() {
     local value="$1" pattern
@@ -71,24 +74,51 @@ ssh_managed_allow_users() {
          on && /^AllowUsers / { $1 = ""; sub(/^ /, ""); print }' "$file"
 }
 
-# ssh_install_managed CANDIDATE [REQUIRED_USERS]: install the drop-in, test, reload;
-# on any failure the previous drop-in is restored.
-ssh_install_managed() {
-    local candidate="$1" required="${2:-}" file backup user ok=1
-    file=$(root_path "$SSH_MANAGED_FILE")
-    mkdir -p -- "$(dirname -- "$file")" || return 1
-    backup=$(backup_file "$file" sshd-jacktools) || return 1
-    atomic_install "$candidate" "$file" 0600 || return 1
-    sshd_config_test >/dev/null 2>&1 || ok=0
-    if (( ok )); then
-        for user in $required; do
-            ssh_user_permitted "$user" || { ui_error ssh.user_excluded "$user"; ok=0; }
-        done
+# ssh_dropin_install FILE LABEL MODE CANDIDATE LOGIN_PORT PORT_CHANGED [REQUIRED_USERS...]
+# The one way JackTools changes OpenSSH: install the drop-in, check it with sshd -t (and that
+# REQUIRED_USERS can still log in), reload (PORT_CHANGED=port_changed restarts ssh.socket).
+# With a LOGIN_PORT the change is kept only once a new login on that port has been
+# confirmed (not asked with --yes). Any failure puts the previous drop-in back.
+# Returns 0 applied, 1 refused before reloading, STEP_RC_RESTORED restored after reloading.
+ssh_dropin_install() {
+    local file="$1" label="$2" mode="$3" candidate="$4" login_port="$5" port_changed="$6" undo user
+    shift 6
+    fs_write_managed "$file" "$label" "$mode" cat -- "$candidate" || return 1
+    undo=$FS_UNDO
+    cache_drop sshd
+    if ! sshd_config_test >/dev/null 2>&1; then
+        ssh_dropin_restore "$file" "$undo" '' '' ui_error
+        return 1
     fi
-    if (( ok )) && ssh_reload; then return 0; fi
-    if [[ -n "$backup" ]]; then cp -a -- "$backup" "$file"; else rm -f -- "$file"; fi
-    ui_error ssh.config_restored
-    return 1
+    for user in "$@"; do
+        ssh_user_permitted "$user" && continue
+        ui_error ssh.user_excluded "$user"
+        ssh_dropin_restore "$file" "$undo" '' '' ui_error
+        return 1
+    done
+    if ! ssh_reload "$port_changed"; then
+        ssh_dropin_restore "$file" "$undo" "$port_changed" reload ui_error
+        return "$STEP_RC_RESTORED"
+    fi
+    [[ -n "$login_port" ]] || return 0
+    # Like netplan try: keep the change only once a new login has been tested.
+    if [[ "$JT_ASSUME_YES" == 1 ]]; then
+        ui_warn ssh.assume_yes "$login_port"
+        return 0
+    fi
+    msg ssh.test_new_session "$login_port"
+    ui_confirm ssh.confirm_new_session && return 0
+    ssh_dropin_restore "$file" "$undo" "$port_changed" reload ui_warn
+    return "$STEP_RC_RESTORED"
+}
+
+# ssh_dropin_restore FILE UNDO PORT_CHANGED RELOAD(reload|'') REPORT(ui_error|ui_warn):
+# previous drop-in back, reloaded when the new one was already live.
+ssh_dropin_restore() {
+    fs_restore "$2" "$1"
+    cache_drop sshd
+    if [[ "$4" == reload ]]; then ssh_reload "$3" || true; fi
+    "$5" ssh.config_restored
 }
 
 # When an AllowUsers policy exists, add USER to the JackTools-managed list.
@@ -106,7 +136,8 @@ ssh_allow_user() {
         awk '/^# >>> JACKTOOLS USERS >>>$/ { skip = 1; next } /^# <<< JACKTOOLS USERS <<<$/ { skip = 0; next } !skip' "$source"
         printf '# >>> JACKTOOLS USERS >>>\nAllowUsers %s\n# <<< JACKTOOLS USERS <<<\n' "$updated"
     } >"$candidate" || return 1
-    ssh_install_managed "$candidate" "$updated"
+    # shellcheck disable=SC2086 # $updated is a list of validated user names.
+    ssh_dropin_install "$file" sshd-jacktools 0600 "$candidate" '' '' $updated
 }
 
 # Socket activation (Ubuntu 22.10+): ssh.socket owns the listening port (replaced in tests).
@@ -131,15 +162,36 @@ ssh_current_port() {
     printf '%s' "${port:-22}"
 }
 
+# ssh_admin_find [--key-only] [--exclude USER]: the first account (the admin of this run,
+# then the discovered users) in the sudo group, able to authenticate (with a key, or with a
+# key or a password) and allowed by the SSH policy. Prints its name; 1 when there is none.
+ssh_admin_find() {
+    local key_only=0 exclude='' user
+    local -a candidates=()
+    while (( $# > 0 )); do
+        case "$1" in
+            --key-only) key_only=1; shift ;;
+            --exclude) exclude="$2"; shift 2 ;;
+            *) return 2 ;;
+        esac
+    done
+    [[ -z "${CFG[ADMIN_USER]:-}" ]] || candidates+=("${CFG[ADMIN_USER]}")
+    mapfile -t -O "${#candidates[@]}" candidates < <(users_discover)
+    for user in "${candidates[@]}"; do
+        if [[ "$user" == "$exclude" ]] || ! user_exists "$user" || ! user_in_group "$user" sudo; then continue; fi
+        if ! user_has_key "$user" && { (( key_only )) || [[ "$(user_password_state "$user")" != P ]]; }; then continue; fi
+        ssh_user_permitted "$user" || continue
+        printf '%s' "$user"
+        return 0
+    done
+    return 1
+}
+
 # A sudo user with an authorized key who is allowed by the SSH policy (the admin being
 # created in this run counts when it has a key).
 ssh_key_admin_available() {
-    local user
     [[ -n "${CFG[ADMIN_KEY]:-}" ]] && return 0
-    while IFS= read -r user; do
-        user_in_group "$user" sudo && user_has_key "$user" && ssh_user_permitted "$user" && return 0
-    done < <(users_discover)
-    return 1
+    ssh_admin_find --key-only >/dev/null
 }
 
 ssh_render_hardening() {
@@ -158,7 +210,7 @@ ssh_hardening_compliant() {
 }
 
 ssh_collect() {
-    local port answer choice
+    local port choice
     local -a root_modes
     port=$(ssh_current_port)
     msg ssh.current "$port" "$(ssh_policy_values passwordauthentication)" "$(ssh_policy_values permitrootlogin)"
@@ -175,12 +227,7 @@ ssh_collect() {
         1) CFG[SSH_ROOT_LOGIN]=prohibit-password ;;
         *) CFG[SSH_ROOT_LOGIN]=keep ;;
     esac
-    while true; do
-        ui_prompt answer ssh.prompt.port "$port" || return 1
-        answer=${answer:-$port}
-        if valid_port "$answer"; then CFG[SSH_PORT]="$answer"; break; fi
-        ui_warn ssh.invalid_port
-    done
+    ui_ask 'CFG[SSH_PORT]' --default "$port" valid_port ssh.invalid_port ssh.prompt.port "$port" || return 1
     [[ "${CFG[SSH_PORT]}" == "$port" ]] || ui_warn ssh.port_change_warning "${CFG[SSH_PORT]}"
     return 0
 }
@@ -193,14 +240,8 @@ ssh_plan() {
     msg ssh.plan_confirm
 }
 
-ssh_restore_hardening() {
-    local file="$1" backup="$2" port_changed="$3"
-    if [[ -n "$backup" ]]; then cp -a -- "$backup" "$file"; else rm -f -- "$file"; fi
-    ssh_reload "$port_changed" || true
-}
-
 ssh_apply() {
-    local file candidate backup port_changed=''
+    local candidate port_changed=''
     ssh_hardening_compliant && return 0
     if [[ "${CFG[SSH_PASSWORD_AUTH]}" == no ]] && ! ssh_key_admin_available; then ui_error ssh.no_key_admin; return 1; fi
     [[ "$(ssh_current_port)" == "${CFG[SSH_PORT]}" ]] || port_changed=port_changed
@@ -208,30 +249,9 @@ ssh_apply() {
     if [[ -n "$port_changed" ]] && command_exists ufw && ufw_active; then
         run ufw allow "${CFG[SSH_PORT]}/tcp" || return 1
     fi
-    file=$(root_path "$SSH_HARDEN_FILE")
-    mkdir -p -- "$(dirname -- "$file")" || return 1
     fs_mktemp candidate
     ssh_render_hardening >"$candidate" || return 1
-    backup=$(backup_file "$file" sshd-hardening) || return 1
-    atomic_install "$candidate" "$file" 0644 || return 1
-    if ! sshd_config_test >/dev/null 2>&1; then
-        ssh_restore_hardening "$file" "$backup" ''
-        ui_error ssh.config_restored
-        return 1
-    fi
-    ssh_reload "$port_changed" || { ssh_restore_hardening "$file" "$backup" "$port_changed"; ui_error ssh.config_restored; return "$STEP_RC_RESTORED"; }
-    # Like netplan try: keep the change only once a new login has been tested.
-    if [[ "$JT_ASSUME_YES" == 1 ]]; then
-        ui_warn ssh.assume_yes "${CFG[SSH_PORT]}"
-        return 0
-    fi
-    msg ssh.test_new_session "${CFG[SSH_PORT]}"
-    if ! ui_confirm ssh.confirm_new_session; then
-        ssh_restore_hardening "$file" "$backup" "$port_changed"
-        ui_warn ssh.config_restored
-        return "$STEP_RC_RESTORED"
-    fi
-    return 0
+    ssh_dropin_install "$(root_path "$SSH_HARDEN_FILE")" sshd-hardening 0644 "$candidate" "${CFG[SSH_PORT]}" "$port_changed"
 }
 
 ssh_verify() { ssh_hardening_compliant; }

@@ -30,20 +30,12 @@ swap_active() { awk 'NR > 1 { printf "%s %d\n", $1, $3 / 1024 }' "$(root_path /p
 swap_file_active_mib() { swap_active | awk -v f="$SWAP_FILE" '$1 == f { print $2 }'; }
 
 swap_collect() {
-    local active answer suggested
+    local active
     active=$(swap_active)
     msg swap.ram "$(swap_ram_mib)"
     if [[ -n "$active" ]]; then msg swap.active_list; printf '  %s\n' "${active//$'\n'/$'\n'  }"; else msg swap.none_active; fi
     if grep -vq "^$SWAP_FILE " <<<"$active" && [[ -n "$active" ]]; then ui_info swap.other_swap_present; fi
-    suggested=$(swap_suggested)
-    while true; do
-        ui_prompt answer swap.prompt "$suggested" || return 1
-        [[ -n "$answer" ]] || return 1
-        answer=${answer^^}
-        # shellcheck disable=SC2153 # CFG keys are not variables.
-        if valid_swap_size "$answer"; then CFG[SWAP_SIZE]="$answer"; return 0; fi
-        ui_warn swap.invalid
-    done
+    ui_ask 'CFG[SWAP_SIZE]' --upper valid_swap_size swap.invalid swap.prompt "$(swap_suggested)"
 }
 
 swap_compliant() {
@@ -69,24 +61,19 @@ swap_plan() {
     fi
 }
 
-# swap_fstab_render SOURCE OUTPUT WANTED(0|1): drop old /swapfile lines, add one when wanted.
+# swap_fstab_render SOURCE WANTED(0|1): drop old /swapfile lines, add one when wanted.
 swap_fstab_render() {
-    awk -v f="$SWAP_FILE" -v wanted="$3" '
+    awk -v f="$SWAP_FILE" -v wanted="$2" '
         $1 == f { next }
         { print }
         END { if (wanted == 1) printf "%s none swap sw 0 0\n", f }
-    ' "$1" >"$2"
+    ' "$1"
 }
 
 swap_update_fstab() {
-    local wanted="$1" fstab candidate
+    local fstab
     fstab=$(root_path /etc/fstab)
-    [[ -e "$fstab" ]] || touch "$fstab" || return 1
-    fs_mktemp candidate
-    swap_fstab_render "$fstab" "$candidate" "$wanted" || return 1
-    cmp -s "$candidate" "$fstab" && return 0
-    backup_file "$fstab" fstab >/dev/null || return 1
-    atomic_install "$candidate" "$fstab" 0644
+    fs_write_managed "$fstab" fstab 0644 swap_fstab_render "$(fs_source "$fstab")" "$1"
 }
 
 swap_free_mib() { df -Pm "$(root_path /)" | awk 'NR == 2 { print $4 }'; }

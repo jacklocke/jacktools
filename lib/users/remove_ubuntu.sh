@@ -4,24 +4,9 @@
 set -Eeuo pipefail
 
 REMOVE_TARGET="ubuntu"
-REMOVE_PHRASE="ELIMINA ubuntu"
 
 # Another account in the sudo group with a key or password, allowed by the SSH policy.
-remove_safe_admin() {
-    local candidate
-    local -a candidates=()
-    [[ -n "${CFG[ADMIN_USER]:-}" ]] && candidates+=("${CFG[ADMIN_USER]}")
-    mapfile -t -O "${#candidates[@]}" candidates < <(users_discover)
-    for candidate in "${candidates[@]}"; do
-        [[ "$candidate" != "$REMOVE_TARGET" ]] || continue
-        if ! user_exists "$candidate" || ! user_in_group "$candidate" sudo; then continue; fi
-        { user_has_key "$candidate" || [[ "$(user_password_state "$candidate")" == P ]]; } || continue
-        ssh_user_permitted "$candidate" || continue
-        printf '%s' "$candidate"
-        return 0
-    done
-    return 1
-}
+remove_safe_admin() { ssh_admin_find --exclude "$REMOVE_TARGET"; }
 
 remove_session_is_target() { [[ "$ENV_OPERATOR" == "$REMOVE_TARGET" || "${USER:-}" == "$REMOVE_TARGET" ]]; }
 
@@ -33,7 +18,7 @@ remove_ubuntu_collect() {
     if ! admin=$(remove_safe_admin) && [[ -z "${CFG[ADMIN_USER]:-}" ]]; then ui_error remove.no_admin; return 1; fi
     [[ -n "$admin" ]] && msg remove.admin_found "$admin"
     ui_warn remove.warning
-    ui_confirm_exact "$REMOVE_PHRASE" remove.confirm || return 1
+    ui_confirm_exact "$(msg_get remove.phrase "$REMOVE_TARGET")" remove.confirm || return 1
     CFG[REMOVE_HOME]=no
     CFG[REMOVE_MAIL]=no
     ui_confirm remove.confirm_home && CFG[REMOVE_HOME]=yes

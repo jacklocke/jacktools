@@ -15,26 +15,25 @@ network_iface_ignored() {
     return 1
 }
 
+network_iface_is_physical() { [[ -e "$(root_path /sys/class/net)/$1/device" ]]; }
+
 network_interfaces() {
-    local path name found=0
+    local path name
+    local -a all=() physical=()
     for path in "$(root_path /sys/class/net)"/*; do
         [[ -d "$path" ]] || continue
         name=${path##*/}
         network_iface_ignored "$name" && continue
-        [[ -e "$path/device" ]] || continue
-        printf '%s\n' "$name"
-        found=1
+        all+=("$name")
+        if network_iface_is_physical "$name"; then physical+=("$name"); fi
     done
-    (( found )) && return 0
-    for path in "$(root_path /sys/class/net)"/*; do
-        [[ -d "$path" ]] || continue
-        name=${path##*/}
-        network_iface_ignored "$name" || printf '%s\n' "$name"
-    done
+    if (( ${#physical[@]} > 0 )); then
+        printf '%s\n' "${physical[@]}"
+    elif (( ${#all[@]} > 0 )); then
+        printf '%s\n' "${all[@]}"
+    fi
     return 0
 }
-
-network_iface_is_physical() { [[ -e "$(root_path /sys/class/net)/$1/device" ]]; }
 
 # Everything in /sys/class/net, for the error message.
 network_all_interfaces() {
@@ -76,24 +75,9 @@ network_render() {
     return 0
 }
 
-# network_ask RESULT_VAR KEY VALIDATOR: repeat until valid; empty input cancels.
-network_ask() {
-    local -n network_ask_result="$1"
-    local network_ask_key="$2" network_ask_validator="$3" network_ask_answer
-    while true; do
-        ui_prompt network_ask_answer "$network_ask_key" || return 1
-        [[ -n "$network_ask_answer" ]] || return 1
-        if "$network_ask_validator" "$network_ask_answer"; then
-            network_ask_result="$network_ask_answer"
-            return 0
-        fi
-        ui_warn network.invalid_value
-    done
-}
-
 network_collect() {
     local -a interfaces modes
-    local choice value=''
+    local choice
     mapfile -t interfaces < <(network_interfaces)
     if (( ${#interfaces[@]} == 0 )); then ui_error network.no_interfaces "$(network_all_interfaces)"; return 1; fi
     network_iface_is_physical "${interfaces[0]}" || ui_warn network.virtual_interfaces
@@ -109,31 +93,22 @@ network_collect() {
     CFG[NET_MODE]="${NETWORK_MODES[$choice]}"
     CFG[NET_CIDR]=''; CFG[NET_GATEWAY]=''; CFG[NET_DNS]=''; CFG[NET_SEARCH]=''
     if [[ "${CFG[NET_MODE]}" == static ]]; then
-        network_ask value network.prompt.cidr valid_cidr || return 1
-        CFG[NET_CIDR]="$value"
-        network_ask value network.prompt.gateway valid_ipv4 || return 1
-        CFG[NET_GATEWAY]="$value"
+        ui_ask 'CFG[NET_CIDR]' valid_cidr network.invalid_value network.prompt.cidr || return 1
+        ui_ask 'CFG[NET_GATEWAY]' valid_ipv4 network.invalid_value network.prompt.gateway || return 1
     fi
     if [[ "${CFG[NET_MODE]}" != dhcp ]]; then
-        network_ask value network.prompt.dns valid_ipv4_list || return 1
-        CFG[NET_DNS]="$value"
-        while true; do
-            ui_prompt value network.prompt.search || return 1
-            if valid_domain_list "$value"; then CFG[NET_SEARCH]="$value"; break; fi
-            ui_warn network.invalid_value
-        done
+        ui_ask 'CFG[NET_DNS]' valid_ipv4_list network.invalid_value network.prompt.dns || return 1
+        ui_ask 'CFG[NET_SEARCH]' --optional valid_domain_list network.invalid_value network.prompt.search || return 1
     fi
     return 0
 }
 
 network_plan() {
-    local file
-    file=$(network_managed_file)
-    if [[ -f "$file" ]] && cmp -s <(network_render) "$file"; then
+    if network_verify; then
         msg steps.plan.compliant
         return 0
     fi
-    msg network.plan_file "$file"
+    msg network.plan_file "$(network_managed_file)"
     network_render | sed 's/^/  /'
     msg network.plan_try "${JACKTOOLS_NETPLAN_TIMEOUT:-30}"
     env_is_ssh_session && msg network.plan_ssh_risk
@@ -236,6 +211,6 @@ network_verify_live() {
     return 0
 }
 
-network_verify() { [[ -f "$(network_managed_file)" ]] && cmp -s <(network_render) "$(network_managed_file)"; }
+network_verify() { fs_file_matches "$(network_managed_file)" network_render; }
 
 step_register network step.network system 0 container

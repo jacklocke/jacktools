@@ -100,7 +100,7 @@ bs_valid_url() {
     [[ "$1" =~ ^${scheme}://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~%+-]+)*/?$ ]]
 }
 
-bs_valid_ref() { [[ "$1" =~ ^[A-Za-z0-9._/-]+$ && "$1" != *..* && "$1" != /* ]]; }
+bs_valid_ref() { bs_safe_path "$1"; }
 
 # Provider from the repository host: github.com, any host with "gitlab", otherwise Gitea/Forgejo.
 bs_detect_provider() {
@@ -278,5 +278,5 @@ bs_main() {
     exit "$rc"
 }
 
-# Sourced by the tests: only run when executed.
+# Sourcing this file defines the functions without running them.
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then bs_main "$@"; fi

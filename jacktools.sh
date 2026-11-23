@@ -172,6 +172,8 @@ main() {
     [[ "$JT_ASSUME_YES" != 1 || "$JT_CONFIG_MODE" == 1 ]] || die main.yes_needs_config
 
     core_install_traps
+    # Slow read-only queries (ufw, sshd -T, accounts, packages) are cached for this run.
+    fs_mktemp JT_CACHE_DIR -d
     env_detect
     preflight_base || exit 1
     log_write INFO "JackTools $JACKTOOLS_VERSION, source: ${JACKTOOLS_SOURCE:-local}"

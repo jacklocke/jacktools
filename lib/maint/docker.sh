@@ -4,6 +4,8 @@ set -Eeuo pipefail
 
 # Read-only docker queries (replaced in tests).
 docker_query() { docker "$@" 2>/dev/null; }
+# Container logs: both streams, since containers often log to stderr (replaced in tests).
+docker_logs() { docker logs --tail 200 --timestamps "$1" 2>&1; }
 
 maint_docker_available() {
     command_exists docker && docker_query info >/dev/null && return 0
@@ -29,14 +31,18 @@ maint_docker_prune() {
 }
 
 maint_docker_logs() {
-    local choice
-    local -a names labels
+    local choice line
+    local -a names=() labels=()
     maint_docker_available || return 0
-    mapfile -t names < <(docker_query ps -a --format '{{.Names}}')
+    # One query, so names and labels always describe the same containers.
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        names+=("${line%%|*}")
+        labels+=("${line%%|*}  (${line#*|})")
+    done < <(docker_query ps -a --format '{{.Names}}|{{.Status}}')
     if (( ${#names[@]} == 0 )); then ui_info maint.docker.no_containers; return 0; fi
-    mapfile -t labels < <(docker_query ps -a --format '{{.Names}}  ({{.Status}})')
     ui_menu choice maint.docker.logs_title labels || return 0
-    docker_query logs --tail 200 --timestamps "${names[$choice]}" 2>&1 | ui_pager
+    docker_logs "${names[$choice]}" | ui_pager
 }
 
 maint_docker_menu() {

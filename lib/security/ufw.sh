@@ -29,19 +29,16 @@ valid_ufw_rule() {
 
 # Output of `ufw status` (replaced in tests).
 ufw_status() { ufw status 2>/dev/null; }
-ufw_active() { ufw_status | grep -q '^Status: active'; }
+# The same, read once per run and again after every `run ufw ...` (ufw is slow to start).
+ufw_status_cached() { cache_get ufw ufw_status; }
+ufw_active() { [[ $'\n'"$(ufw_status_cached)" == *$'\n'"Status: active"* ]]; }
 
 # ufw_has_rule RULE: an ALLOW rule for RULE (IPv4 line) is present.
-ufw_has_rule() { ufw_status | awk -v r="$1" '$1 == r && $2 == "ALLOW" { found = 1 } END { exit !found }'; }
-
-# ufw_rule_add RULE: append RULE to CFG[UFW_ALLOW] unless it is already listed.
-ufw_rule_add() {
-    [[ " ${CFG[UFW_ALLOW]} " == *" $1 "* ]] || CFG[UFW_ALLOW]+=" $1"
-}
+ufw_has_rule() { ufw_status_cached | awk -v r="$1" '$1 == r && $2 == "ALLOW" { found = 1 } END { exit !found }'; }
 
 ufw_collect() {
-    local ssh_port answer item i
-    local -a labels=() selected=() extra=()
+    local ssh_port extra i
+    local -a labels=() selected=()
     [[ "$ENV_VIRT_KIND" == container ]] && ui_warn ufw.container_warning
     ssh_port=${CFG[SSH_PORT]:-$(ssh_current_port)}
     msg ufw.ssh_rule "$ssh_port"
@@ -51,16 +48,13 @@ ufw_collect() {
     CFG[UFW_ALLOW]="$ssh_port/tcp"
     for i in "${!UFW_COMMON_RULES[@]}"; do
         [[ ${selected[$i]} == 1 ]] || continue
-        for item in ${UFW_COMMON_RULES[$i]}; do ufw_rule_add "$item"; done
+        # shellcheck disable=SC2086 # One entry may hold several space-separated rules.
+        words_add 'CFG[UFW_ALLOW]' ${UFW_COMMON_RULES[$i]}
     done
     if [[ ${selected[${#UFW_COMMON_RULES[@]}]} == 1 ]]; then
-        while true; do
-            ui_prompt answer ufw.prompt.other || return 1
-            IFS=', ' read -r -a extra <<<"$answer"
-            for item in "${extra[@]}"; do valid_ufw_rule "$item" || { ui_warn ufw.invalid_rule "$item"; continue 2; }; done
-            for item in "${extra[@]}"; do ufw_rule_add "$item"; done
-            break
-        done
+        ui_ask_list extra valid_ufw_rule ufw.invalid_rule ufw.prompt.other || return 1
+        # shellcheck disable=SC2086 # Validated rules, space separated.
+        words_add 'CFG[UFW_ALLOW]' $extra
     fi
     return 0
 }

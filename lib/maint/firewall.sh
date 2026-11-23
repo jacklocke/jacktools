@@ -38,17 +38,8 @@ maint_fw_add() {
     local -a verbs=(allow limit deny)
     local -a command
     fw_ufw_available || return 0
-    while true; do
-        ui_prompt rule ufw.prompt.other || return 0
-        [[ -n "$rule" ]] || return 0
-        valid_ufw_rule "$rule" && break
-        ui_warn ufw.invalid_rule "$rule"
-    done
-    while true; do
-        ui_prompt source maint.fw.prompt_source || return 0
-        [[ -z "$source" ]] || valid_ip_or_cidr "$source" && break
-        ui_warn fail2ban.invalid_ip "$source"
-    done
+    ui_ask rule valid_ufw_rule ufw.invalid_rule ufw.prompt.other || return 0
+    ui_ask source --optional valid_ip_or_cidr fail2ban.invalid_ip maint.fw.prompt_source || return 0
     ui_menu choice maint.fw.action_title actions || return 0
     if [[ "${verbs[$choice]}" == deny && "${rule%%/*}" == "$(ssh_current_port)" ]]; then
         ui_error maint.fw.deny_ssh

@@ -14,6 +14,7 @@ SCHEMES_DIR="$PL_DIR/colorschemes/tmux"
 # I segmenti custom vengono cercati in PL_DIR anche se config.json indica ~/.config
 PATHS_OPT="common.paths=[\"$PL_DIR/segments\"]"
 DEMO_DELAY=3
+# PLCOLORS_EMBEDDED=1: galleria senza schema attivo né suggerimento finale (anteprima di JackTools)
 
 schemes() {
     local f
@@ -57,7 +58,7 @@ gallery() {
     printf -v line '%*s' "$cols" ''
     line=${line// /─}
     for s in $(schemes); do
-        printf '\n\e[2m%s\e[0m\n  \e[1m%s\e[0m%s\n\n' "$line" "$s" "$([ "$s" = "$cur" ] && printf '  (attivo)')"
+        printf '\n\e[2m%s\e[0m\n  \e[1m%s\e[0m%s\n\n' "$line" "$s" "$([ "$s" = "$cur" ] && [ -z "${PLCOLORS_EMBEDDED:-}" ] && printf '  (attivo)')"
         # powerline-render, non il client: il demone riusa in cache il primo override ricevuto
         printf '  '
         powerline-render tmux right -c "$PATHS_OPT" -c "ext.tmux.colorscheme=$s" | tmux_to_ansi
@@ -65,7 +66,7 @@ gallery() {
         powerline-render shell aboveleft -c "$PATHS_OPT" -c "ext.shell.colorscheme=$s" --last-exit-code 1 --jobnum 1 | sed 's/^/  /'
         printf '\n'
     done
-    printf '\n  Applica con: plcolors <nome>    Prova sulla barra: plcolors --demo\n\n'
+    [ -n "${PLCOLORS_EMBEDDED:-}" ] || printf '\n  Applica con: plcolors <nome>    Prova sulla barra: plcolors --demo\n\n'
 }
 
 apply() {

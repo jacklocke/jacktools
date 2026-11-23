@@ -26,32 +26,6 @@ declare -gA CUSTOM_MODULE_NEEDS=(
 
 declare -ga CUSTOM_MOD_IDS=() CUSTOM_MOD_DESC=() CUSTOM_MOD_DEFAULT=() CUSTOM_MOD_FILE=()
 
-# ---- Users
-
-login_defs_value() {
-    local value
-    value=$(awk -v k="$1" '$1 == k { print $2; exit }' "$(root_path /etc/login.defs)" 2>/dev/null)
-    [[ "$value" =~ ^[0-9]+$ ]] && printf '%s' "$value" || printf '%s' "$2"
-}
-
-login_shell_valid() {
-    case "$1" in */nologin|*/false|'') return 1 ;; esac
-    grep -Fqx -- "$1" "$(root_path /etc/shells)" 2>/dev/null
-}
-
-# Human accounts: UID_MIN..UID_MAX with a real login shell, in passwd order.
-users_discover() {
-    local min max name uid shell
-    min=$(login_defs_value UID_MIN 1000)
-    max=$(login_defs_value UID_MAX 60000)
-    while IFS=: read -r name _ uid _ _ _ shell; do
-        [[ "$uid" =~ ^[0-9]+$ ]] || continue
-        (( uid >= min && uid <= max )) || continue
-        login_shell_valid "$shell" && printf '%s\n' "$name"
-    done < <(users_passwd)
-    return 0
-}
-
 # ---- Modules and banners
 
 # Header: "# jt-module: id | description | on|off"
@@ -196,8 +170,8 @@ custom_user_label() {
 custom_docker_available() { group_exists docker || [[ -n "${CFG[DOCKER_ARCH]:-}" ]]; }
 
 custom_collect_user() {
-    local user="$1" i extra key choice
-    local -a labels=() selected=() modules=() extras=() extras_offered=() sudo_modes
+    local user="$1" i extra
+    local -a labels=() selected=() modules=() extras=() extras_offered=()
     for i in "${!CUSTOM_MOD_IDS[@]}"; do
         labels+=("${CUSTOM_MOD_DESC[$i]}")
         selected+=("${CUSTOM_MOD_DEFAULT[$i]}")
@@ -220,17 +194,10 @@ custom_collect_user() {
         ui_confirm customize.docker_group_confirm "$user" || CFG["CUSTOM_EXTRAS:$user"]="${CFG["CUSTOM_EXTRAS:$user"]/docker_group/}"
     fi
     if [[ " ${extras[*]} " == *" ssh_key "* ]]; then
-        while true; do
-            ui_prompt key customize.prompt.key "$user" || return 1
-            [[ -n "$key" ]] || return 1
-            if valid_ssh_public_key "$key"; then CFG["CUSTOM_KEY:$user"]="$key"; break; fi
-            ui_warn admin.invalid_key
-        done
+        ui_ask "CFG[CUSTOM_KEY:$user]" valid_ssh_public_key admin.invalid_key customize.prompt.key "$user" || return 1
     fi
     if [[ " ${extras[*]} " == *" sudo "* ]]; then
-        sudo_modes=("$(msg_get admin.sudo.password)" "$(msg_get admin.sudo.nopasswd)")
-        ui_menu choice admin.sudo.title sudo_modes ui.menu.cancel || return 1
-        if (( choice == 0 )); then CFG["CUSTOM_SUDO:$user"]=password; else CFG["CUSTOM_SUDO:$user"]=nopasswd; fi
+        account_ask_sudo "CFG[CUSTOM_SUDO:$user]" || return 1
     fi
     return 0
 }
@@ -280,7 +247,7 @@ custom_any_module() {
 # custom_render_block USER: content of the managed block (markers excluded).
 custom_render_block() {
     local user="$1" i
-    printf '# Gestito da JackTools: le modifiche dentro questo blocco vengono sovrascritte.\n'
+    printf '# %s\n' "$(msg_get customize.block_header)"
     # ":" keeps the block valid when no module is selected.
     printf 'if [[ $- == *i* ]]; then\n:\n'
     if custom_has_local_bin "$user"; then
